@@ -3,7 +3,7 @@ import { Bindings } from './types'
 import { NanoWalletState } from 'nano-wallet-js'
 import NanoWallet from 'nano-wallet-js'
 import { errorHandler } from './middlewares'
-import { signBlock } from 'nanocurrency'
+import { checkAddress, checkAmount, checkSignature, signBlock, verifyBlock } from 'nanocurrency'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 
@@ -66,7 +66,25 @@ export class NanoDrop implements DurableObject {
             if (!payload.account) {
                 throw new Error('Account is required')
             }
-            const amount = this.dropAmount()
+            if (!checkAddress(payload.account)){
+                throw new Error('Invalid account')
+            }
+            if (!payload.ticket) {
+                throw new Error('Ticket is required')
+            }
+
+            const { amount, ip } = await this.parseTicket(payload.ticket)
+
+            if (this.env !== 'development') {
+                const realIp = c.req.headers.get('x-real-ip')
+                if (!realIp) {
+                    throw new Error('IP header is missing')
+                }   
+                if (realIp !== ip) {
+                    throw new Error('Ticket IP mismatch')
+                }
+            }
+
             const { hash } = await this.wallet.send(payload.account, amount)
             return c.json({ hash, amount })
         })
@@ -122,6 +140,75 @@ export class NanoDrop implements DurableObject {
         }))
 
         return ticket
+    }
+
+    async parseTicket(ticket: string) {
+
+        const isValidBase64 =
+            ticket.length % 4 === 0 &&
+            /^[A-Za-z0-9+/]+[=]{0,2}$/.test(ticket)
+
+        if (!isValidBase64) {
+            throw new Error('Invalid ticket')
+        }
+
+        let data
+
+        try {
+            data = JSON.parse(atob(ticket))
+        } catch (err) {
+            throw new Error('Invalid ticket')
+        }
+
+        const { ip, amount, version, expiresAt, signature } = data
+
+        const isValidIPv4OrIpv6 =
+            ip.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/) ||
+            ip.match(/^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i)
+
+        if (!isValidIPv4OrIpv6 || version !== 0) {
+            throw new Error('Invalid ticket')
+        }
+
+        if (expiresAt < Date.now()) {
+            throw new Error('Ticket expired')
+        }
+
+        if (!checkAmount(amount) || !checkSignature(signature)) {
+            throw new Error('Invalid ticket')
+        }
+
+        const digest = await crypto.subtle.digest({
+            name: 'SHA-256',
+        }, new TextEncoder().encode(JSON.stringify({
+            ip,
+            amount,
+            version,
+            expiresAt
+        })))
+
+        const hash = [...new Uint8Array(digest)]
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+
+        const valid = verifyBlock({
+            hash,
+            publicKey: this.wallet.publicKey,
+            signature
+        })
+
+        if (!valid) {
+            throw new Error('Invalid ticket')
+        }
+
+        return {
+            ip,
+            amount,
+            version,
+            expiresAt,
+            hash,
+            signature
+        }
     }
 
     fetch(request: Request) {
