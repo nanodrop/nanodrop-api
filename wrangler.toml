@@ -11,12 +11,12 @@ tag = "v1" # Should be unique for each entry
 new_classes = ["NanoDrop"]
 
 [[queues.producers]]
-  queue = "hono-queue"
+  queue = "nanodrop-queue"
   binding = "HONO_QUEUE"
 
 [[queues.consumers]]
-  queue = "hono-queue"
+  queue = "nanodrop-queue"
   max_batch_size = 1
   max_batch_timeout = 5 # seconds
   max_retries = 0
-  dead_letter_queue = "hono-queue-dead"
+  dead_letter_queue = "nanodrop-queue-dead"
