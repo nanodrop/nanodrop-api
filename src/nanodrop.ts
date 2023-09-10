@@ -3,6 +3,9 @@ import { Bindings } from './types'
 import { NanoWalletState } from 'nano-wallet-js'
 import NanoWallet from 'nano-wallet-js'
 import { errorHandler } from './middlewares'
+import { signBlock } from 'nanocurrency'
+
+const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 
 export class NanoDrop implements DurableObject {
 
@@ -10,8 +13,11 @@ export class NanoDrop implements DurableObject {
     wallet: NanoWallet
     state: DurableObjectState
     static version = "v0.1.0-alpha.1"
+    env: 'development' | 'production'
 
     constructor(state: DurableObjectState, env: Bindings) {
+
+        this.env = env.ENVIRONMENT
 
         this.state = state
 
@@ -33,7 +39,7 @@ export class NanoDrop implements DurableObject {
             if (walletState) {
                 this.wallet.update(walletState)
             }
-        })        
+        })
 
         this.app.get('/wallet', (c) => {
             const { balance, receivable, frontier, representative } = this.wallet.state
@@ -45,12 +51,19 @@ export class NanoDrop implements DurableObject {
         })
 
         this.app.get('/ticket', async (c) => {
-            return c.json({ ticket: '', amount: this.dropAmount(), createdAt: Date.now(), expiresAt: Date.now() })
+            const ip = this.env === 'development' ? '127.0.0.1' : c.req.headers.get('x-real-ip')
+            if (!ip) {
+                throw new Error('IP header is missing')
+            }
+            const amount = this.dropAmount()
+            const expiresAt = Date.now() + TICKET_EXPIRATION
+            const ticket = await this.generateTicket(ip, amount, expiresAt)
+            return c.json({ ticket, amount, expiresAt })
         })
 
         this.app.post('/drop', async (c) => {
             const payload = await c.req.json()
-            if (!payload.account){
+            if (!payload.account) {
                 throw new Error('Account is required')
             }
             const amount = this.dropAmount()
@@ -75,8 +88,40 @@ export class NanoDrop implements DurableObject {
         })
     }
 
-    dropAmount () {
+    dropAmount() {
         return '100000000000000000000000000'
+    }
+
+    async generateTicket(ip: string, amount: string, expiresAt: number) {
+
+        const version = 0
+
+        const data = {
+            ip,
+            amount,
+            version,
+            expiresAt
+        }
+
+        const digest = await crypto.subtle.digest({
+            name: 'SHA-256',
+        }, new TextEncoder().encode(JSON.stringify(data)))
+
+        const hash = [...new Uint8Array(digest)]
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('')
+
+        const signature = signBlock({
+            hash,
+            secretKey: this.wallet.config.privateKey
+        })
+
+        const ticket = btoa(JSON.stringify({
+            ...data,
+            signature
+        }))
+
+        return ticket
     }
 
     fetch(request: Request) {
