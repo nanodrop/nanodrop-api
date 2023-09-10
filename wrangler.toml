@@ -1,0 +1,22 @@
+name = "nanodrop-api"
+compatibility_date = "2023-01-01"
+
+[durable_objects]
+bindings = [
+  { name = "DURABLE_OBJECT", class_name = "NanoDrop" } # Binding to our NanoDrop class
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["NanoDrop"]
+
+[[queues.producers]]
+  queue = "hono-queue"
+  binding = "HONO_QUEUE"
+
+[[queues.consumers]]
+  queue = "hono-queue"
+  max_batch_size = 1
+  max_batch_timeout = 5 # seconds
+  max_retries = 0
+  dead_letter_queue = "hono-queue-dead"
