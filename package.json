@@ -7,6 +7,7 @@
     "deploy": "wrangler deploy --minify src/index.ts --var ENVIRONMENT:production"
   },
   "dependencies": {
+    "bignumber.js": "^9.1.2",
     "hono": "^3.2.7",
     "nano-wallet-js": "0.1.0",
     "nanocurrency": "^2.5.0"

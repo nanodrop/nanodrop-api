@@ -3,9 +3,14 @@ import { Bindings } from './types'
 import { NanoWalletState } from 'nano-wallet-js'
 import NanoWallet from 'nano-wallet-js'
 import { errorHandler } from './middlewares'
-import { checkAddress, checkAmount, checkSignature, signBlock, verifyBlock } from 'nanocurrency'
+import { Unit, checkAddress, checkAmount, checkSignature, convert, signBlock, verifyBlock } from 'nanocurrency'
+import { TunedBigNumber } from './utils'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
+
+const MIN_DROP_AMOUNT = 0.000001
+const MAX_DROP_AMOUNT = 0.01
+const DIVIDE_BALANCE_BY = 10000
 
 export class NanoDrop implements DurableObject {
 
@@ -56,9 +61,10 @@ export class NanoDrop implements DurableObject {
                 throw new Error('IP header is missing')
             }
             const amount = this.dropAmount()
+            const amountNano = convert(amount, {from: Unit.raw, to: Unit.NANO})
             const expiresAt = Date.now() + TICKET_EXPIRATION
             const ticket = await this.generateTicket(ip, amount, expiresAt)
-            return c.json({ ticket, amount, expiresAt })
+            return c.json({ ticket, amount, amountNano, expiresAt })
         })
 
         this.app.post('/drop', async (c) => {
@@ -66,12 +72,14 @@ export class NanoDrop implements DurableObject {
             if (!payload.account) {
                 throw new Error('Account is required')
             }
-            if (!checkAddress(payload.account)){
+            if (!checkAddress(payload.account)) {
                 throw new Error('Invalid account')
             }
             if (!payload.ticket) {
                 throw new Error('Ticket is required')
             }
+
+            // TODO: ensure ticket has not been used
 
             const { amount, ip } = await this.parseTicket(payload.ticket)
 
@@ -79,7 +87,7 @@ export class NanoDrop implements DurableObject {
                 const realIp = c.req.headers.get('x-real-ip')
                 if (!realIp) {
                     throw new Error('IP header is missing')
-                }   
+                }
                 if (realIp !== ip) {
                     throw new Error('Ticket IP mismatch')
                 }
@@ -107,7 +115,14 @@ export class NanoDrop implements DurableObject {
     }
 
     dropAmount() {
-        return '100000000000000000000000000'
+        const balance = this.wallet.balance
+        const min = convert(MIN_DROP_AMOUNT.toString(), { from: Unit.NANO, to: Unit.raw })
+        const max = convert(MAX_DROP_AMOUNT.toString(), { from: Unit.NANO, to: Unit.raw })
+        if (TunedBigNumber(balance).isLessThan(min)) return "0"
+        const amount = TunedBigNumber(balance).dividedBy(DIVIDE_BALANCE_BY).toString(10)
+        const amountFixed = TunedBigNumber(amount).minus(amount.substring(1, amount.length)).toString(10).replace(/[2-9]/g, '1')
+        if (TunedBigNumber(amountFixed).isLessThan(min)) return min
+        return TunedBigNumber(amountFixed).isGreaterThan(max) ? max : amountFixed
     }
 
     async generateTicket(ip: string, amount: string, expiresAt: number) {

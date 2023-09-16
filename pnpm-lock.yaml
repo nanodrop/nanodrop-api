@@ -2,12 +2,14 @@ lockfileVersion: 5.4
 
 specifiers:
   '@cloudflare/workers-types': ^4.20230518.0
+  bignumber.js: ^9.1.2
   hono: ^3.2.7
   nano-wallet-js: 0.1.0
   nanocurrency: ^2.5.0
   wrangler: ^3.1.0
 
 dependencies:
+  bignumber.js: 9.1.2
   hono: 3.2.7
   nano-wallet-js: 0.1.0
   nanocurrency: 2.5.0
@@ -326,8 +328,8 @@ packages:
       prebuild-install: 7.1.1
     dev: true
 
-  /bignumber.js/9.1.1:
-    resolution: {integrity: sha512-pHm4LsMJ6lzgNGVfZHjMoO8sdoRhOzOH4MLmY65Jg70bpxCKu5iOHNJyfF6OyvYw7t8Fpf35RuzUyqnQsj8Vig==}
+  /bignumber.js/9.1.2:
+    resolution: {integrity: sha512-2/mKyZH9K85bzOEfhXDBFZTGd1CTs+5IHpeFQo9luiBG7hghdC851Pj2WAhb6E3R6b9tZj/XKhbg4fum+Kepug==}
     dev: false
 
   /binary-extensions/2.2.0:
@@ -667,14 +669,14 @@ packages:
   /nano-wallet-js/0.1.0:
     resolution: {integrity: sha512-eeJlC3vjWMtYXOzPPXC9J1fETf6QTO6ZIllN5j/ClEGBLzOwz72i0GT32EmXprB93lF8PXfwIvHRoA3wETJZgg==}
     dependencies:
-      bignumber.js: 9.1.1
+      bignumber.js: 9.1.2
       nanocurrency: 2.5.0
     dev: false
 
   /nanocurrency/2.5.0:
     resolution: {integrity: sha512-zMDlgBCML0vMGvldsZN1Np93vwiMjaBLCkOM2tXv0LNIpty8HghDMZiNRzfBPkP70oRhRU+hOpVCEpTzZK5gDQ==}
     dependencies:
-      bignumber.js: 9.1.1
+      bignumber.js: 9.1.2
       blakejs: 1.2.1
     dev: false
 
