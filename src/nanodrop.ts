@@ -61,7 +61,10 @@ export class NanoDrop implements DurableObject {
                 throw new Error('IP header is missing')
             }
             const amount = this.dropAmount()
-            const amountNano = convert(amount, {from: Unit.raw, to: Unit.NANO})
+            if (amount === '0') {
+                throw new Error('Insufficient balance')
+            }
+            const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
             const expiresAt = Date.now() + TICKET_EXPIRATION
             const ticket = await this.generateTicket(ip, amount, expiresAt)
             return c.json({ ticket, amount, amountNano, expiresAt })
