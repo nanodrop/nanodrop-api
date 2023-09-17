@@ -62,6 +62,11 @@ export class NanoDrop implements DurableObject {
             }
 
             const country = this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
+
+            if (!country) {
+                throw new Error('Country header is missing')
+            }
+
             const isProxy = false
             const proxyCheckedBy = 'nanodrop'
 
