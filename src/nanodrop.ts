@@ -62,7 +62,7 @@ export class NanoDrop implements DurableObject {
             }
 
             // count number of drops from db based on ip
-            const count: number = await env.DB.prepare('SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2').bind(ip, PERIOD).first('count')
+            const count: number = await env.DB.prepare('SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2').bind(ip, Date.now() - PERIOD).first('count')
 
             if (count >= MAX_DROPS_PER_IP) {
                 return c.json({ error: 'Drop limit reached for your IP' }, 403)
