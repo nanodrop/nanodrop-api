@@ -60,6 +60,14 @@ export class NanoDrop implements DurableObject {
             if (!ip) {
                 throw new Error('IP header is missing')
             }
+
+            const country = this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
+            const isProxy = false
+            const proxyCheckedBy = 'nanodrop'
+
+            await env.DB.prepare('INSERT INTO ip_info (ip, country, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing')
+                .bind(ip, country, isProxy ? 1 : 0, proxyCheckedBy).run()
+
             const amount = this.dropAmount()
             if (amount === '0') {
                 throw new Error('Insufficient balance')
@@ -71,6 +79,9 @@ export class NanoDrop implements DurableObject {
         })
 
         this.app.post('/drop', async (c) => {
+
+            const startedAt = Date.now()
+
             const payload = await c.req.json()
             if (!payload.account) {
                 throw new Error('Account is required')
@@ -81,6 +92,7 @@ export class NanoDrop implements DurableObject {
             if (!payload.ticket) {
                 throw new Error('Ticket is required')
             }
+
 
             // TODO: ensure ticket has not been used
 
@@ -97,6 +109,15 @@ export class NanoDrop implements DurableObject {
             }
 
             const { hash } = await this.wallet.send(payload.account, amount)
+
+            const timestamp = Date.now()
+
+            const took = timestamp - startedAt
+
+            // save drop
+            await env.DB.prepare('INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+                .bind(hash, payload.account, amount, ip, timestamp, took).run()
+
             return c.json({ hash, amount })
         })
 
