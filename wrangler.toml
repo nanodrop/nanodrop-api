@@ -20,3 +20,9 @@ new_classes = ["NanoDrop"]
   max_batch_timeout = 5 # seconds
   max_retries = 0
   dead_letter_queue = "nanodrop-queue-dead"
+
+[[d1_databases]]
+binding = "DB" # i.e. available in your Worker on env.DB
+database_name = "nanodrop"
+database_id = ""
+migrations_dir = "migrations"
