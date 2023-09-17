@@ -80,7 +80,7 @@ export class NanoDrop implements DurableObject {
             await env.DB.prepare('INSERT INTO ip_info (ip, country, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing')
                 .bind(ip, country, isProxy ? 1 : 0, proxyCheckedBy).run()
 
-            const amount = this.dropAmount()
+            const amount = this.getDropAmount()
             if (amount === '0') {
                 return c.json({ error: 'Insufficient balance' }, 500)
             }
@@ -177,7 +177,7 @@ export class NanoDrop implements DurableObject {
         })
     }
 
-    dropAmount() {
+    getDropAmount() {
         const balance = this.wallet.balance
         const min = convert(MIN_DROP_AMOUNT.toString(), { from: Unit.NANO, to: Unit.raw })
         const max = convert(MAX_DROP_AMOUNT.toString(), { from: Unit.NANO, to: Unit.raw })
