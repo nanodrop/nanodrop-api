@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { Bindings } from './types'
+import { Bindings, DropData } from './types'
 import { NanoWalletState } from 'nano-wallet-js'
 import NanoWallet from 'nano-wallet-js'
 import { errorHandler } from './middlewares'
@@ -119,6 +119,15 @@ export class NanoDrop implements DurableObject {
                 .bind(hash, payload.account, amount, ip, timestamp, took).run()
 
             return c.json({ hash, amount })
+        })
+
+        this.app.get('/drops', async (c) => {
+            const { results } = await env.DB.prepare(`
+                SELECT hash, account, amount, took, timestamp, ip_info.country, ip_info.is_proxy
+                FROM drops
+                INNER JOIN ip_info ON drops.ip = ip_info.ip
+            `).all<DropData>();
+            return c.json(results?.map((drop) => ({ ...drop, is_proxy: drop.is_proxy ? true : false })) || [])
         })
 
         this.app.post('/sync', async (c) => {

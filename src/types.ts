@@ -9,3 +9,13 @@ export type Bindings = {
     REPRESENTATIVE: string
     DEBUG: string
 }
+
+export interface DropData {
+    hash: string
+    account: string
+    amount: string
+    country: string
+    timestamp: string
+    took: number
+    is_proxy: boolean
+}
