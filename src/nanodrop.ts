@@ -105,9 +105,20 @@ export class NanoDrop implements DurableObject {
                 return c.json({ error: 'Ticket is required' }, 400)
             }
 
-            // TODO: ensure ticket has not been used
+            const redeemedTickets = await this.storage.get<Record<string, number>>("redeemed_tickets")
 
-            const { amount, ip } = await this.parseTicket(payload.ticket)
+            if (redeemedTickets) {
+                const tickets = Object.keys(redeemedTickets)
+                if (tickets.includes(payload.ticket)) {
+                    return c.json({ error: 'Ticket already redeemed' }, 403)
+                }
+            }
+
+            const { amount, ip, expiresAt } = await this.parseTicket(payload.ticket)
+
+            if (expiresAt < Date.now()) {
+                throw new Error('Ticket expired')
+            }
 
             if (this.env !== 'development') {
                 const realIp = c.req.headers.get('x-real-ip')
@@ -124,6 +135,12 @@ export class NanoDrop implements DurableObject {
             const { hash } = await this.wallet.send(payload.account, amount)
 
             const timestamp = Date.now()
+
+            // save redeemed ticket with expiresAt for later deletion
+            await this.storage.put("redeemed_tickets", {
+                ...redeemedTickets,
+                [payload.ticket]: expiresAt
+            })
 
             const took = timestamp - startedAt
 
@@ -229,10 +246,6 @@ export class NanoDrop implements DurableObject {
 
         if (!isValidIPv4OrIpv6 || version !== 0) {
             throw new Error('Invalid ticket')
-        }
-
-        if (expiresAt < Date.now()) {
-            throw new Error('Ticket expired')
         }
 
         if (!checkAmount(amount) || !checkSignature(signature)) {
