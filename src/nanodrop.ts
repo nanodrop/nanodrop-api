@@ -11,6 +11,8 @@ const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 const MIN_DROP_AMOUNT = 0.000001
 const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
+const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
+const MAX_DROPS_PER_IP = 3
 
 export class NanoDrop implements DurableObject {
 
@@ -59,6 +61,13 @@ export class NanoDrop implements DurableObject {
             const ip = this.env === 'development' ? '127.0.0.1' : c.req.headers.get('x-real-ip')
             if (!ip) {
                 throw new Error('IP header is missing')
+            }
+
+            // count number of drops from db based on ip
+            const count: number = await env.DB.prepare('SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2').bind(ip, PERIOD).first('count')
+            
+            if (count >= MAX_DROPS_PER_IP) {
+                throw new Error('Drop limit reached for your IP')
             }
 
             const country = this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
