@@ -17,7 +17,7 @@ export class NanoDrop implements DurableObject {
 
     app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
     wallet: NanoWallet
-    state: DurableObjectState
+    storage: DurableObjectStorage
     static version = "v0.1.0-alpha.1"
     env: 'development' | 'production'
 
@@ -25,7 +25,7 @@ export class NanoDrop implements DurableObject {
 
         this.env = env.ENVIRONMENT
 
-        this.state = state
+        this.storage = state.storage
 
         this.wallet = new NanoWallet({
             rpcUrls: env.RPC_URLS.split(','),
@@ -36,12 +36,11 @@ export class NanoDrop implements DurableObject {
         })
 
         this.wallet.subscribe(async (state) => {
-            await this.state.storage?.put('wallet-state', state)
+            await this.storage.put('wallet-state', state)
         })
 
-        this.state.blockConcurrencyWhile(async () => {
-            const walletState = await this.state.storage?.get<NanoWalletState>('wallet-state')
-            console.info("... blockCurrency While", { walletState: JSON.stringify(walletState, null, 2) })
+        state.blockConcurrencyWhile(async () => {
+            const walletState = await this.storage.get<NanoWalletState>('wallet-state')
             if (walletState) {
                 this.wallet.update(walletState)
             }
