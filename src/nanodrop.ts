@@ -7,7 +7,6 @@ import { Unit, checkAddress, checkAmount, checkSignature, convert, signBlock, ve
 import { TunedBigNumber } from './utils'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
-
 const MIN_DROP_AMOUNT = 0.000001
 const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
@@ -60,20 +59,20 @@ export class NanoDrop implements DurableObject {
         this.app.get('/ticket', async (c) => {
             const ip = this.env === 'development' ? '127.0.0.1' : c.req.headers.get('x-real-ip')
             if (!ip) {
-                throw new Error('IP header is missing')
+                return c.json({ error: 'IP header is missing' }, 400)
             }
 
             // count number of drops from db based on ip
             const count: number = await env.DB.prepare('SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2').bind(ip, PERIOD).first('count')
-            
+
             if (count >= MAX_DROPS_PER_IP) {
-                throw new Error('Drop limit reached for your IP')
+                return c.json({ error: 'Drop limit reached for your IP' }, 403)
             }
 
             const country = this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
 
             if (!country) {
-                throw new Error('Country header is missing')
+                return c.json({ error: 'Country header is missing' }, 400)
             }
 
             const isProxy = false
@@ -84,7 +83,7 @@ export class NanoDrop implements DurableObject {
 
             const amount = this.dropAmount()
             if (amount === '0') {
-                throw new Error('Insufficient balance')
+                return c.json({ error: 'Insufficient balance' }, 500)
             }
             const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
             const expiresAt = Date.now() + TICKET_EXPIRATION
@@ -98,15 +97,14 @@ export class NanoDrop implements DurableObject {
 
             const payload = await c.req.json()
             if (!payload.account) {
-                throw new Error('Account is required')
+                return c.json({ error: 'Account is required' }, 400)
             }
             if (!checkAddress(payload.account)) {
-                throw new Error('Invalid account')
+                return c.json({ error: 'Invalid account' }, 400)
             }
             if (!payload.ticket) {
-                throw new Error('Ticket is required')
+                return c.json({ error: 'Ticket is required' }, 400)
             }
-
 
             // TODO: ensure ticket has not been used
 
@@ -115,10 +113,12 @@ export class NanoDrop implements DurableObject {
             if (this.env !== 'development') {
                 const realIp = c.req.headers.get('x-real-ip')
                 if (!realIp) {
-                    throw new Error('IP header is missing')
+                    return c.json({ error: 'IP header is missing' }, 400)
                 }
                 if (realIp !== ip) {
-                    throw new Error('Ticket IP mismatch')
+                    if (!realIp) {
+                        return c.json({ error: 'Ticket IP mismatch' }, 400)
+                    }
                 }
             }
 
