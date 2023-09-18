@@ -170,11 +170,6 @@ export class NanoDrop implements DurableObject {
             const { hash } = await this.wallet.receive(link)
             return c.json({ hash })
         })
-
-        this.app.post('/queue', async (c) => {
-            await env.HONO_QUEUE.send({ message: 'Hello queue from Durable Object!' })
-            return c.text('Sent to Queue!')
-        })
     }
 
     getDropAmount() {
