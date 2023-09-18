@@ -35,15 +35,8 @@ export class NanoDrop implements DurableObject {
             debug: env.DEBUG === 'true'
         })
 
-        this.wallet.subscribe(async (state) => {
-            await this.storage.put('wallet-state', state)
-        })
-
         state.blockConcurrencyWhile(async () => {
-            const walletState = await this.storage.get<NanoWalletState>('wallet-state')
-            if (walletState) {
-                this.wallet.update(walletState)
-            }
+            await this.init()
         })
 
         this.app.get('/wallet', (c) => {
@@ -61,7 +54,6 @@ export class NanoDrop implements DurableObject {
                 return c.json({ error: 'IP header is missing' }, 400)
             }
 
-            // count number of drops from db based on ip
             const count: number = await env.DB.prepare('SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2').bind(ip, Date.now() - PERIOD).first('count')
 
             if (count >= MAX_DROPS_PER_IP) {
@@ -169,6 +161,16 @@ export class NanoDrop implements DurableObject {
             const link = c.req.param('link')
             const { hash } = await this.wallet.receive(link)
             return c.json({ hash })
+        })
+    }
+
+    async init() {
+        const walletState = await this.storage.get<NanoWalletState>('wallet-state')
+        if (walletState) {
+            this.wallet.update(walletState)
+        }
+        this.wallet.subscribe(async (state) => {
+            await this.storage.put('wallet-state', state)
         })
     }
 
