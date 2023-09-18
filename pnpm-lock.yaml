@@ -6,6 +6,7 @@ specifiers:
   hono: ^3.2.7
   nano-wallet-js: 0.1.0
   nanocurrency: ^2.5.0
+  prettier: ^3.0.3
   wrangler: ^3.1.0
 
 dependencies:
@@ -16,6 +17,7 @@ dependencies:
 
 devDependencies:
   '@cloudflare/workers-types': 4.20230518.0
+  prettier: 3.0.3
   wrangler: 3.1.1
 
 packages:
@@ -739,6 +741,12 @@ packages:
       simple-get: 4.0.1
       tar-fs: 2.1.1
       tunnel-agent: 0.6.0
+    dev: true
+
+  /prettier/3.0.3:
+    resolution: {integrity: sha512-L/4pUDMxcNa8R/EthV08Zt42WBO4h1rarVtK0K+QJG0X187OLo7l699jWw0GKuwzkPQ//jMFA/8Xm6Fh3J/DAg==}
+    engines: {node: '>=14'}
+    hasBin: true
     dev: true
 
   /printable-characters/1.0.42:
