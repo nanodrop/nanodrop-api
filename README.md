@@ -12,6 +12,7 @@ This project is made with Typescript and was designed to run on the EDGE. It imp
 - [Hono](https://hono.dev/): A small, simple, and ultrafast web framework for the Edges.
 
 ## Running locally
+
 ```
 pnpm install
 pnpm dev
@@ -20,22 +21,26 @@ pnpm dev
 ## Deploy
 
 First, authenticate with your Cloudflare account:
+
 ```
 pnpm wrangler login
 ```
 
 Add queue:
+
 ```
 pnpm wrangler queues create nanodrop-queue
 ```
 
 Set production secrets:
+
 ```
 pnpm wrangler secret put PRIVATE_KEY
 ...
 ```
 
 Finally, deploy it:
+
 ```
 pnpm run deploy
 ```
