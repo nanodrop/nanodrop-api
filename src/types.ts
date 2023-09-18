@@ -7,6 +7,7 @@ export type Bindings = {
     WORKER_URLS: string
     PRIVATE_KEY: string
     REPRESENTATIVE: string
+    ADMIN_TOKEN: string
     DEBUG: string
 }
 

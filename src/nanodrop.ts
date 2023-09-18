@@ -149,6 +149,9 @@ export class NanoDrop implements DurableObject {
         })
 
         this.app.post('/wallet/sync', async (c) => {
+            if (c.req.headers.get("Authorization") !== `Bearer ${env.ADMIN_TOKEN}`) {
+                return c.json({ error: 'Unauthorized' }, 401)
+            }
             await this.wallet.sync()
             return c.json({ success: true })
         })
@@ -158,6 +161,9 @@ export class NanoDrop implements DurableObject {
         })
 
         this.app.post('/wallet/receive/:link', async (c) => {
+            if (c.req.headers.get("Authorization") !== `Bearer ${env.ADMIN_TOKEN}`) {
+                return c.json({ error: 'Unauthorized' }, 401)
+            }
             const link = c.req.param('link')
             const { hash } = await this.wallet.receive(link)
             return c.json({ hash })
