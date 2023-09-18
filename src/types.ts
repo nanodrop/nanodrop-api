@@ -15,7 +15,7 @@ export interface DropData {
     account: string
     amount: string
     country: string
-    timestamp: string
+    timestamp: number
     took: number
     is_proxy: boolean
 }
