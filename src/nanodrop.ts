@@ -39,15 +39,6 @@ export class NanoDrop implements DurableObject {
             await this.init()
         })
 
-        this.app.get('/wallet', (c) => {
-            const { balance, receivable, frontier, representative } = this.wallet.state
-            return c.json({ account: this.wallet.account, balance, receivable, frontier, representative })
-        })
-
-        this.app.get('/wallet/receivable-blocks', async (c) => {
-            return c.json(this.wallet.receivableBlocks)
-        })
-
         this.app.get('/ticket', async (c) => {
             const ip = this.env === 'development' ? '127.0.0.1' : c.req.headers.get('x-real-ip')
             if (!ip) {
@@ -152,12 +143,21 @@ export class NanoDrop implements DurableObject {
             return c.json(results?.map((drop) => ({ ...drop, is_proxy: drop.is_proxy ? true : false })) || [])
         })
 
-        this.app.post('/sync', async (c) => {
+        this.app.get('/wallet', (c) => {
+            const { balance, receivable, frontier, representative } = this.wallet.state
+            return c.json({ account: this.wallet.account, balance, receivable, frontier, representative })
+        })
+
+        this.app.post('/wallet/sync', async (c) => {
             await this.wallet.sync()
             return c.json({ success: true })
         })
 
-        this.app.post('/receive/:link', async (c) => {
+        this.app.get('/wallet/receivables', async (c) => {
+            return c.json(this.wallet.receivableBlocks)
+        })
+
+        this.app.post('/wallet/receive/:link', async (c) => {
             const link = c.req.param('link')
             const { hash } = await this.wallet.receive(link)
             return c.json({ hash })
