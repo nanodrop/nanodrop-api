@@ -4,7 +4,7 @@ specifiers:
   '@cloudflare/workers-types': ^4.20230518.0
   bignumber.js: ^9.1.2
   hono: ^3.2.7
-  nano-wallet-js: 0.1.0
+  nano-wallet-js: 0.2.0
   nanocurrency: ^2.5.0
   prettier: ^3.0.3
   wrangler: ^3.1.0
@@ -12,7 +12,7 @@ specifiers:
 dependencies:
   bignumber.js: 9.1.2
   hono: 3.2.7
-  nano-wallet-js: 0.1.0
+  nano-wallet-js: 0.2.0
   nanocurrency: 2.5.0
 
 devDependencies:
@@ -668,8 +668,8 @@ packages:
     hasBin: true
     dev: true
 
-  /nano-wallet-js/0.1.0:
-    resolution: {integrity: sha512-eeJlC3vjWMtYXOzPPXC9J1fETf6QTO6ZIllN5j/ClEGBLzOwz72i0GT32EmXprB93lF8PXfwIvHRoA3wETJZgg==}
+  /nano-wallet-js/0.2.0:
+    resolution: {integrity: sha512-0ggUrUIhjJgVkhCL3xAPdSnPl4VACvlXhaLZ6n3LkjcuE49Tic5Kh17+vOIqhf1IKSGw0yiNM4UWSMFqcXRKfA==}
     dependencies:
       bignumber.js: 9.1.2
       nanocurrency: 2.5.0
