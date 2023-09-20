@@ -209,8 +209,8 @@ export class NanoDrop implements DurableObject {
 		if (walletState) {
 			this.wallet.update(walletState)
 		}
-		this.wallet.subscribe(async state => {
-			await this.storage.put('wallet-state', state)
+		this.wallet.subscribe(state => {
+			this.storage.put('wallet-state', state)
 		})
 	}
 
@@ -294,11 +294,12 @@ export class NanoDrop implements DurableObject {
 			ip.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/) ||
 			ip.match(/^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i)
 
-		if (!isValidIPv4OrIpv6 || version !== 0) {
-			throw new Error('Invalid ticket')
-		}
-
-		if (!checkAmount(amount) || !checkSignature(signature)) {
+		if (
+			!isValidIPv4OrIpv6 ||
+			version !== 0 ||
+			!checkAmount(amount) ||
+			!checkSignature(signature)
+		) {
 			throw new Error('Invalid ticket')
 		}
 
@@ -320,13 +321,13 @@ export class NanoDrop implements DurableObject {
 			.map(b => b.toString(16).padStart(2, '0'))
 			.join('')
 
-		const valid = verifyBlock({
+		const matchSignature = verifyBlock({
 			hash,
 			publicKey: this.wallet.publicKey,
 			signature,
 		})
 
-		if (!valid) {
+		if (!matchSignature) {
 			throw new Error('Invalid ticket')
 		}
 
