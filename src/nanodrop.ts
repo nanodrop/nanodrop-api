@@ -181,11 +181,21 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.get('/drops', async c => {
+			const orderBy = c.req.query('orderBy') || 'DESC'
+			if (orderBy !== 'ASC' && orderBy !== 'DESC') {
+				return c.json({ error: 'Invalid orderBy' }, 400)
+			}
+			const limit = Number(c.req.query('limit')) || 20
+			if (isNaN(limit) || limit < 1 || limit > 100) {
+				return c.json({ error: 'Invalid limit' }, 400)
+			}
 			const { results } = await env.DB.prepare(
 				`
                 SELECT hash, account, amount, took, timestamp, ip_info.country, ip_info.is_proxy
                 FROM drops
                 INNER JOIN ip_info ON drops.ip = ip_info.ip
+				ORDER BY timestamp ${orderBy}
+				LIMIT ${limit}
             `,
 			).all<DropData>()
 			return c.json(
