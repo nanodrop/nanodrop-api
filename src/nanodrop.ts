@@ -20,6 +20,7 @@ const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
+const ENABLE_LIMIT_PER_IP_IN_DEV = false
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -65,7 +66,10 @@ export class NanoDrop implements DurableObject {
 				? (dropsCount.results[0].count as number)
 				: 0
 
-			if (count >= MAX_DROPS_PER_IP) {
+			if (
+				count >= MAX_DROPS_PER_IP &&
+				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
+			) {
 				return c.json({ error: 'Drop limit reached for your IP' }, 403)
 			}
 
