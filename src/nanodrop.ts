@@ -54,31 +54,57 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'IP header is missing' }, 400)
 			}
 
-			const count: number = await env.DB.prepare(
-				'SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2',
-			)
-				.bind(ip, Date.now() - PERIOD)
-				.first('count')
+			const [dropsCount, ipInfo] = await env.DB.batch<Record<string, any>>([
+				env.DB.prepare(
+					'SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2',
+				).bind(ip, Date.now() - PERIOD),
+				env.DB.prepare(`SELECT is_proxy FROM ip_info WHERE ip = ?1`).bind(ip),
+			])
+
+			const count = dropsCount.results
+				? (dropsCount.results[0].count as number)
+				: 0
 
 			if (count >= MAX_DROPS_PER_IP) {
 				return c.json({ error: 'Drop limit reached for your IP' }, 403)
 			}
 
-			const country =
-				this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
+			let isProxy = false
 
-			if (!country) {
-				return c.json({ error: 'Country header is missing' }, 400)
+			if (!ipInfo.results?.length) {
+				// Retrieve IP info and save on db only the first time
+
+				const country =
+					this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
+
+				if (!country) {
+					return c.json({ error: 'Country header is missing' }, 400)
+				}
+
+				let proxyCheckedBy = 'nanodrop'
+
+				if (this.env !== 'development') {
+					try {
+						isProxy = await this.checkProxy(ip)
+						proxyCheckedBy = 'badip.info'
+					} catch (error) {
+						// Do not throw
+						console.error(`Failed checking IP ${ip}`)
+					}
+				}
+
+				await env.DB.prepare(
+					'INSERT INTO ip_info (ip, country, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
+				)
+					.bind(ip, country, isProxy ? 1 : 0, proxyCheckedBy)
+					.run()
+			} else {
+				isProxy = ipInfo.results[0].is_proxy ? true : false
 			}
 
-			const isProxy = false
-			const proxyCheckedBy = 'nanodrop'
-
-			await env.DB.prepare(
-				'INSERT INTO ip_info (ip, country, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
-			)
-				.bind(ip, country, isProxy ? 1 : 0, proxyCheckedBy)
-				.run()
+			if (isProxy) {
+				return c.json({ error: 'Proxies are not allowed' }, 403)
+			}
 
 			const amount = this.getDropAmount()
 			if (amount === '0') {
@@ -339,6 +365,19 @@ export class NanoDrop implements DurableObject {
 			hash,
 			signature,
 		}
+	}
+
+	async checkProxy(ip: string) {
+		const response = await fetch(`https://api.badip.info/${ip}?strategy=quick`)
+		if (!response.ok) {
+			throw new Error('Proxy check failed')
+		}
+		const data = await response.json<Record<string, any>>()
+		console.log('data', JSON.stringify(data, null, 2))
+		if (!('isBad' in data)) {
+			throw new Error('Proxy check failed')
+		}
+		return data.isBad as boolean
 	}
 
 	fetch(request: Request) {
