@@ -121,67 +121,78 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.post('/drop', async c => {
-			const startedAt = Date.now()
+			try {
+				const startedAt = Date.now()
 
-			const payload = await c.req.json()
-			if (!payload.account) {
-				return c.json({ error: 'Account is required' }, 400)
-			}
-			if (!checkAddress(payload.account)) {
-				return c.json({ error: 'Invalid account' }, 400)
-			}
-			if (!payload.ticket) {
-				return c.json({ error: 'Ticket is required' }, 400)
-			}
-
-			const redeemedTickets =
-				await this.storage.get<Record<string, number>>('redeemed_tickets')
-
-			if (redeemedTickets) {
-				const tickets = Object.keys(redeemedTickets)
-				if (tickets.includes(payload.ticket)) {
-					return c.json({ error: 'Ticket already redeemed' }, 403)
+				const payload = await c.req.json()
+				if (!payload.account) {
+					return c.json({ error: 'Account is required' }, 400)
 				}
-			}
-
-			const { amount, ip, expiresAt } = await this.parseTicket(payload.ticket)
-
-			if (expiresAt < Date.now()) {
-				throw new Error('Ticket expired')
-			}
-
-			if (this.env !== 'development') {
-				const realIp = c.req.headers.get('x-real-ip')
-				if (!realIp) {
-					return c.json({ error: 'IP header is missing' }, 400)
+				if (!checkAddress(payload.account)) {
+					return c.json({ error: 'Invalid account' }, 400)
 				}
-				if (realIp !== ip) {
-					if (!realIp) {
-						return c.json({ error: 'Ticket IP mismatch' }, 400)
+				if (!payload.ticket) {
+					return c.json({ error: 'Ticket is required' }, 400)
+				}
+
+				const redeemedTickets =
+					await this.storage.get<Record<string, number>>('redeemed_tickets')
+
+				if (redeemedTickets) {
+					const tickets = Object.keys(redeemedTickets)
+					if (tickets.includes(payload.ticket)) {
+						return c.json({ error: 'Ticket already redeemed' }, 403)
 					}
 				}
+
+				const { amount, ip, expiresAt } = await this.parseTicket(payload.ticket)
+
+				if (expiresAt < Date.now()) {
+					throw new Error('Ticket expired')
+				}
+
+				if (this.env !== 'development') {
+					const realIp = c.req.headers.get('x-real-ip')
+					if (!realIp) {
+						return c.json({ error: 'IP header is missing' }, 400)
+					}
+					if (realIp !== ip) {
+						if (!realIp) {
+							return c.json({ error: 'Ticket IP mismatch' }, 400)
+						}
+					}
+				}
+
+				const { hash } = await this.wallet.send(payload.account, amount)
+
+				const timestamp = Date.now()
+
+				// save redeemed ticket with expiresAt for later deletion
+				await this.storage.put('redeemed_tickets', {
+					...redeemedTickets,
+					[payload.ticket]: expiresAt,
+				})
+
+				const took = timestamp - startedAt
+
+				// save drop
+				await env.DB.prepare(
+					'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+				)
+					.bind(hash, payload.account, amount, ip, timestamp, took)
+					.run()
+
+				return c.json({ hash, amount })
+			} catch (error) {
+				if (
+					error instanceof Error &&
+					(error.message === 'Fork' || error.message === 'Old block')
+				) {
+					// Fix fork and Old block syncing wallet
+					this.wallet.sync()
+				}
+				throw error
 			}
-
-			const { hash } = await this.wallet.send(payload.account, amount)
-
-			const timestamp = Date.now()
-
-			// save redeemed ticket with expiresAt for later deletion
-			await this.storage.put('redeemed_tickets', {
-				...redeemedTickets,
-				[payload.ticket]: expiresAt,
-			})
-
-			const took = timestamp - startedAt
-
-			// save drop
-			await env.DB.prepare(
-				'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
-			)
-				.bind(hash, payload.account, amount, ip, timestamp, took)
-				.run()
-
-			return c.json({ hash, amount })
 		})
 
 		this.app.get('/drops', async c => {
