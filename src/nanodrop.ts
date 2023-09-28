@@ -12,7 +12,7 @@ import {
 	signBlock,
 	verifyBlock,
 } from 'nanocurrency'
-import { TunedBigNumber } from './utils'
+import { TunedBigNumber, isValidIPv4OrIpv6 } from './utils'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 const MIN_DROP_AMOUNT = 0.000001
@@ -66,9 +66,13 @@ export class NanoDrop implements DurableObject {
 				? (dropsCount.results[0].count as number)
 				: 0
 
+			const ipWhitelist =
+				(await this.storage.get<string[]>('ip-whitelist')) || []
+
 			if (
 				count >= MAX_DROPS_PER_IP &&
-				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
+				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV) &&
+				!ipWhitelist.includes(ip)
 			) {
 				return c.json({ error: 'Drop limit reached for your IP' }, 403)
 			}
@@ -253,6 +257,35 @@ export class NanoDrop implements DurableObject {
 			const { hash } = await this.wallet.receive(link)
 			return c.json({ hash })
 		})
+
+		this.app.get('/whitelist/ip', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+			const ipWhitelist =
+				(await this.storage.get<string[]>('ip-whitelist')) || []
+			return c.json(ipWhitelist)
+		})
+
+		this.app.put('/whitelist/ip/:ipAddress', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+			const ip = c.req.param('ipAddress')
+
+			const isValidIP = isValidIPv4OrIpv6(ip)
+
+			if (!isValidIP) {
+				return c.json({ error: 'Invalid IP' }, 400)
+			}
+
+			const ipWhitelist =
+				(await this.storage.get<string[]>('ip-whitelist')) || []
+			if (!ipWhitelist.includes(ip)) {
+				await this.storage.put('ip-whitelist', [...ipWhitelist, ip])
+			}
+			return c.json({ success: true })
+		})
 	}
 
 	async init() {
@@ -341,12 +374,10 @@ export class NanoDrop implements DurableObject {
 
 		const { ip, amount, version, expiresAt, signature } = data
 
-		const isValidIPv4OrIpv6 =
-			ip.match(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/) ||
-			ip.match(/^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i)
+		const isValidIP = isValidIPv4OrIpv6(ip)
 
 		if (
-			!isValidIPv4OrIpv6 ||
+			!isValidIP ||
 			version !== 0 ||
 			!checkAmount(amount) ||
 			!checkSignature(signature)
