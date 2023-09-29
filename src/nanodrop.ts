@@ -21,6 +21,7 @@ const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
+const VERIFICATION_REQUIRED_BY_DEFAULT = true
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -120,8 +121,20 @@ export class NanoDrop implements DurableObject {
 			}
 			const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
 			const expiresAt = Date.now() + TICKET_EXPIRATION
-			const ticket = await this.generateTicket(ip, amount, expiresAt)
-			return c.json({ ticket, amount, amountNano, expiresAt })
+			const verificationRequired = isProxy || VERIFICATION_REQUIRED_BY_DEFAULT
+			const ticket = await this.generateTicket(
+				ip,
+				amount,
+				expiresAt,
+				verificationRequired,
+			)
+			return c.json({
+				ticket,
+				amount,
+				amountNano,
+				expiresAt,
+				verificationRequired,
+			})
 		})
 
 		this.app.post('/drop', async c => {
@@ -149,7 +162,8 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const { amount, ip, expiresAt } = await this.parseTicket(payload.ticket)
+				const { amount, ip, expiresAt, verificationRequired } =
+					await this.parseTicket(payload.ticket)
 
 				if (expiresAt < Date.now()) {
 					throw new Error('Ticket expired')
@@ -164,6 +178,30 @@ export class NanoDrop implements DurableObject {
 						if (!realIp) {
 							return c.json({ error: 'Ticket IP mismatch' }, 400)
 						}
+					}
+				}
+
+				if (verificationRequired) {
+					if (!payload.turnstileToken) {
+						return c.json({ error: 'Turnstile token is missing' }, 400)
+					}
+
+					const formData = new FormData()
+					formData.append('secret', '0x4AAAAAAAKvYTq1_mNAXl9iBPctEbeWNj8')
+					formData.append('response', payload.turnstileToken)
+					formData.append('remoteip', ip)
+
+					const url =
+						'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+					const result = await fetch(url, {
+						body: formData,
+						method: 'POST',
+					})
+
+					const outcome = await result.json<{ success: boolean }>()
+
+					if (!outcome.success) {
+						return c.json({ error: 'Turnstile token failed' }, 400)
 					}
 				}
 
@@ -320,14 +358,20 @@ export class NanoDrop implements DurableObject {
 		return TunedBigNumber(amountFixed).isGreaterThan(max) ? max : amountFixed
 	}
 
-	async generateTicket(ip: string, amount: string, expiresAt: number) {
-		const version = 0
+	async generateTicket(
+		ip: string,
+		amount: string,
+		expiresAt: number,
+		verificationRequired: boolean,
+	) {
+		const version = 1
 
 		const data = {
 			ip,
 			amount,
 			version,
 			expiresAt,
+			verificationRequired,
 		}
 
 		const digest = await crypto.subtle.digest(
@@ -372,15 +416,20 @@ export class NanoDrop implements DurableObject {
 			throw new Error('Invalid ticket')
 		}
 
-		const { ip, amount, version, expiresAt, signature } = data
+		const { ip, amount, version, expiresAt, verificationRequired, signature } =
+			data
+
+		if (version < 1) {
+			throw new Error('Old ticket version')
+		}
 
 		const isValidIP = isValidIPv4OrIpv6(ip)
 
 		if (
 			!isValidIP ||
-			version !== 0 ||
 			!checkAmount(amount) ||
-			!checkSignature(signature)
+			!checkSignature(signature) ||
+			typeof verificationRequired !== 'boolean'
 		) {
 			throw new Error('Invalid ticket')
 		}
@@ -395,6 +444,7 @@ export class NanoDrop implements DurableObject {
 					amount,
 					version,
 					expiresAt,
+					verificationRequired,
 				}),
 			),
 		)
@@ -419,6 +469,7 @@ export class NanoDrop implements DurableObject {
 			version,
 			expiresAt,
 			hash,
+			verificationRequired,
 			signature,
 		}
 	}
