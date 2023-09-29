@@ -187,7 +187,7 @@ export class NanoDrop implements DurableObject {
 					}
 
 					const formData = new FormData()
-					formData.append('secret', '0x4AAAAAAAKvYTq1_mNAXl9iBPctEbeWNj8')
+					formData.append('secret', env.TURNSTILE_SECRET)
 					formData.append('response', payload.turnstileToken)
 					formData.append('remoteip', ip)
 

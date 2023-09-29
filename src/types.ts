@@ -8,6 +8,7 @@ export type Bindings = {
 	PRIVATE_KEY: string
 	REPRESENTATIVE: string
 	ADMIN_TOKEN: string
+	TURNSTILE_SECRET: string
 	DEBUG: string
 }
 
