@@ -21,7 +21,7 @@ const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
-const VERIFICATION_REQUIRED_BY_DEFAULT = true
+const VERIFICATION_REQUIRED_BY_DEFAULT = false
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
