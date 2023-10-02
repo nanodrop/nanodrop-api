@@ -152,18 +152,13 @@ export class NanoDrop implements DurableObject {
 					return c.json({ error: 'Ticket is required' }, 400)
 				}
 
-				const redeemedTickets =
-					await this.storage.get<Record<string, number>>('redeemed_tickets')
-
-				if (redeemedTickets) {
-					const tickets = Object.keys(redeemedTickets)
-					if (tickets.includes(payload.ticket)) {
-						return c.json({ error: 'Ticket already redeemed' }, 403)
-					}
-				}
-
-				const { amount, ip, expiresAt, verificationRequired } =
-					await this.parseTicket(payload.ticket)
+				const {
+					hash: ticketHash,
+					amount,
+					ip,
+					expiresAt,
+					verificationRequired,
+				} = await this.parseTicket(payload.ticket)
 
 				if (expiresAt < Date.now()) {
 					throw new Error('Ticket expired')
@@ -178,6 +173,17 @@ export class NanoDrop implements DurableObject {
 						if (!realIp) {
 							return c.json({ error: 'Ticket IP mismatch' }, 400)
 						}
+					}
+				}
+
+				const redeemedTicketHashes = await this.storage.get<
+					Record<string, number>
+				>('redeemed_ticket_hashes')
+
+				if (redeemedTicketHashes) {
+					const tickets = Object.keys(redeemedTicketHashes)
+					if (tickets.includes(ticketHash)) {
+						return c.json({ error: 'Ticket already redeemed' }, 403)
 					}
 				}
 
@@ -209,10 +215,10 @@ export class NanoDrop implements DurableObject {
 
 				const timestamp = Date.now()
 
-				// save redeemed ticket with expiresAt for later deletion
-				await this.storage.put('redeemed_tickets', {
-					...redeemedTickets,
-					[payload.ticket]: expiresAt,
+				// save redeemed ticket hash with expiresAt for later deletion
+				await this.storage.put('redeemed_ticket_hashes', {
+					...redeemedTicketHashes,
+					[ticketHash]: expiresAt,
 				})
 
 				const took = timestamp - startedAt
