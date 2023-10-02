@@ -29,11 +29,14 @@ export class NanoDrop implements DurableObject {
 	storage: DurableObjectStorage
 	static version = 'v0.1.0-alpha.1'
 	env: 'development' | 'production'
+	db: D1Database
 
 	constructor(state: DurableObjectState, env: Bindings) {
 		this.env = env.ENVIRONMENT
 
 		this.storage = state.storage
+
+		this.db = env.DB
 
 		this.wallet = new NanoWallet({
 			rpcUrls: env.RPC_URLS.split(','),
@@ -215,20 +218,18 @@ export class NanoDrop implements DurableObject {
 
 				const timestamp = Date.now()
 
-				// save redeemed ticket hash with expiresAt for later deletion
-				await this.storage.put('redeemed_ticket_hashes', {
-					...redeemedTicketHashes,
-					[ticketHash]: expiresAt,
-				})
-
 				const took = timestamp - startedAt
 
-				// save drop
-				await env.DB.prepare(
-					'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
-				)
-					.bind(hash, payload.account, amount, ip, timestamp, took)
-					.run()
+				this.redeemTicket({ hash: ticketHash, expiresAt })
+
+				this.saveDrop({
+					hash,
+					account: payload.account,
+					amount,
+					ip,
+					timestamp,
+					took,
+				})
 
 				return c.json({ hash, amount })
 			} catch (error) {
@@ -491,6 +492,41 @@ export class NanoDrop implements DurableObject {
 			throw new Error('Proxy check failed')
 		}
 		return data.isBad as boolean
+	}
+
+	async redeemTicket({ hash, expiresAt }: { hash: string; expiresAt: number }) {
+		// save redeemed ticket hash with expiresAt for later deletion
+		const redeemedTicketHashes = await this.storage.get<Record<string, number>>(
+			'redeemed_ticket_hashes',
+		)
+		await this.storage.put('redeemed_ticket_hashes', {
+			...redeemedTicketHashes,
+			[hash]: expiresAt,
+		})
+	}
+
+	async saveDrop(data: {
+		hash: string
+		account: string
+		amount: string
+		ip: string
+		timestamp: number
+		took: number
+	}) {
+		// save drop
+		await this.db
+			.prepare(
+				'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+			)
+			.bind(
+				data.hash,
+				data.account,
+				data.amount,
+				data.ip,
+				data.timestamp,
+				data.took,
+			)
+			.run()
 	}
 
 	fetch(request: Request) {
