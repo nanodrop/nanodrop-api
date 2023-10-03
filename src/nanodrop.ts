@@ -131,6 +131,7 @@ export class NanoDrop implements DurableObject {
 				expiresAt,
 				verificationRequired,
 			)
+
 			return c.json({
 				ticket,
 				amount,
@@ -487,7 +488,6 @@ export class NanoDrop implements DurableObject {
 			throw new Error('Proxy check failed')
 		}
 		const data = await response.json<Record<string, any>>()
-		console.log('data', JSON.stringify(data, null, 2))
 		if (!('isBad' in data)) {
 			throw new Error('Proxy check failed')
 		}
@@ -495,12 +495,18 @@ export class NanoDrop implements DurableObject {
 	}
 
 	async redeemTicket({ hash, expiresAt }: { hash: string; expiresAt: number }) {
-		// save redeemed ticket hash with expiresAt for later deletion
 		const redeemedTicketHashes = await this.storage.get<Record<string, number>>(
 			'redeemed_ticket_hashes',
 		)
+
+		const now = Date.now()
+		const nonExpiredTickets = Object.entries(redeemedTicketHashes || {}).filter(
+			([, expiresAt]) => expiresAt > now,
+		)
+
+		// save redeemed ticket hashes with expiresAt for later deletion
 		await this.storage.put('redeemed_ticket_hashes', {
-			...redeemedTicketHashes,
+			...Object.fromEntries(nonExpiredTickets),
 			[hash]: expiresAt,
 		})
 	}
