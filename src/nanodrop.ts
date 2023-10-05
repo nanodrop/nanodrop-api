@@ -22,6 +22,8 @@ const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
 const VERIFICATION_REQUIRED_BY_DEFAULT = false
+const MAX_DROPS_PER_ACCOUNT = 3
+const MAX_TMP_ACCOUNT_BLACKLIST_LENGTH = 10000
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -189,6 +191,14 @@ export class NanoDrop implements DurableObject {
 					if (tickets.includes(ticketHash)) {
 						return c.json({ error: 'Ticket already redeemed' }, 403)
 					}
+				}
+
+				const accountIsInTmpBlacklist = await this.accountIsInTmpBlacklist(
+					payload.account,
+				)
+
+				if (accountIsInTmpBlacklist) {
+					return c.json({ error: 'Limit reached for this account' }, 403)
 				}
 
 				if (verificationRequired) {
@@ -519,20 +529,59 @@ export class NanoDrop implements DurableObject {
 		timestamp: number
 		took: number
 	}) {
-		// save drop
-		await this.db
-			.prepare(
-				'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
-			)
-			.bind(
-				data.hash,
-				data.account,
-				data.amount,
-				data.ip,
-				data.timestamp,
-				data.took,
-			)
-			.run()
+		const [dropsCount] = await this.db.batch<Record<string, any>>([
+			this.db
+				.prepare(
+					'SELECT COUNT(*) as count FROM drops WHERE account = ?1 AND timestamp >= ?2',
+				)
+				.bind(data.account, Date.now() - PERIOD),
+			this.db
+				.prepare(
+					'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+				)
+				.bind(
+					data.hash,
+					data.account,
+					data.amount,
+					data.ip,
+					data.timestamp,
+					data.took,
+				),
+		])
+
+		const count = dropsCount.results
+			? (dropsCount.results[0].count as number)
+			: 0
+
+		if (count + 1 >= MAX_DROPS_PER_ACCOUNT) {
+			await this.tmpBlacklistAccount(data.account)
+		}
+	}
+
+	async tmpBlacklistAccount(account: string) {
+		// Durable Objects applies a 128 KiB limit for storing values.
+		// That's why it's preferable to just store the checksums for each account, since
+		// the possibility of 2 accounts checksum having the same array is 1 in 32 ** 8.
+		// MAX_TMP_ACCOUNT_BLACKLIST_LENGTH must ensure that the size of the serialized
+		// array does not exceed the limit.
+
+		const checksum = account.slice(-8)
+		const blacklistedAccounts =
+			(await this.storage.get<string[]>('temporary-account-blacklist')) || []
+		if (blacklistedAccounts.includes(checksum)) return
+		if (blacklistedAccounts.length === MAX_TMP_ACCOUNT_BLACKLIST_LENGTH) {
+			blacklistedAccounts.shift()
+		}
+		blacklistedAccounts.push(checksum)
+		await this.storage.put('temporary-account-blacklist', blacklistedAccounts)
+	}
+
+	async accountIsInTmpBlacklist(account: string) {
+		const checksum = account.slice(-8)
+		const blacklistedAccounts =
+			(await this.storage.get<string[]>('temporary-account-blacklist')) || []
+		if (blacklistedAccounts.includes(checksum)) return true
+		return false
 	}
 
 	fetch(request: Request) {
