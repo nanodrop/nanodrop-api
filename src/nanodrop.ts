@@ -70,15 +70,15 @@ export class NanoDrop implements DurableObject {
 				? (dropsCount.results[0].count as number)
 				: 0
 
-			const ipWhitelist =
-				(await this.storage.get<string[]>('ip-whitelist')) || []
-
 			if (
 				count >= MAX_DROPS_PER_IP &&
-				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV) &&
-				!ipWhitelist.includes(ip)
+				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
 			) {
-				return c.json({ error: 'Drop limit reached for your IP' }, 403)
+				const ipWhitelist =
+					(await this.storage.get<string[]>('ip-whitelist')) || []
+				if (!ipWhitelist.includes(ip)) {
+					return c.json({ error: 'Drop limit reached for your IP' }, 403)
+				}
 			}
 
 			let isProxy = false
