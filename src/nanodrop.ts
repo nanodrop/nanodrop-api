@@ -54,6 +54,10 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.get('/ticket', async c => {
+			if (env.ALLOW_ORIGIN && env.ALLOW_ORIGIN !== c.req.header('origin')) {
+				return c.json({ error: 'Origin mismatch' }, 400)
+			}
+
 			const ip =
 				this.env === 'development'
 					? '127.0.0.1'

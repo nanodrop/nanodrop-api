@@ -9,6 +9,7 @@ export type Bindings = {
 	REPRESENTATIVE: string
 	ADMIN_TOKEN: string
 	TURNSTILE_SECRET: string
+	ALLOW_ORIGIN?: string
 	DEBUG: string
 }
 
