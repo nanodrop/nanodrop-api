@@ -54,7 +54,10 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.get('/ticket', async c => {
-			if (env.ALLOW_ORIGIN && env.ALLOW_ORIGIN !== c.req.header('origin')) {
+			if (
+				env.ALLOW_ORIGIN &&
+				new URL(env.ALLOW_ORIGIN).origin !== c.req.header('origin')
+			) {
 				return c.json({ error: 'Origin mismatch' }, 400)
 			}
 
