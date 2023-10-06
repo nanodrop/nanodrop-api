@@ -264,13 +264,17 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.get('/drops', async c => {
-			const orderBy = c.req.query('orderBy') || 'DESC'
+			const orderBy = c.req.query('orderBy')?.toUpperCase() || 'DESC'
 			if (orderBy !== 'ASC' && orderBy !== 'DESC') {
 				return c.json({ error: 'Invalid orderBy' }, 400)
 			}
 			const limit = Number(c.req.query('limit')) || 20
 			if (isNaN(limit) || limit < 1 || limit > 100) {
 				return c.json({ error: 'Invalid limit' }, 400)
+			}
+			const offset = Number(c.req.query('offset')) || 0
+			if (isNaN(offset) || offset < 0) {
+				return c.json({ error: 'Invalid offset' }, 400)
 			}
 			const { results } = await env.DB.prepare(
 				`
@@ -279,6 +283,7 @@ export class NanoDrop implements DurableObject {
                 INNER JOIN ip_info ON drops.ip = ip_info.ip
 				ORDER BY timestamp ${orderBy}
 				LIMIT ${limit}
+				OFFSET ${offset}
             `,
 			).all<DropData>()
 			return c.json(
