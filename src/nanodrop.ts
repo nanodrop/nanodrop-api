@@ -24,6 +24,7 @@ const ENABLE_LIMIT_PER_IP_IN_DEV = false
 const VERIFICATION_REQUIRED_BY_DEFAULT = false
 const MAX_DROPS_PER_ACCOUNT = 3
 const MAX_TMP_ACCOUNT_BLACKLIST_LENGTH = 10000
+const BAN_PROXIES = false
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -116,7 +117,7 @@ export class NanoDrop implements DurableObject {
 				isProxy = ipInfo.results[0].is_proxy ? true : false
 			}
 
-			if (isProxy) {
+			if (isProxy && BAN_PROXIES) {
 				return c.json({ error: 'Proxies are not allowed' }, 403)
 			}
 
