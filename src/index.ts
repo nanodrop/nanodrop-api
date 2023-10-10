@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import queue from './queue'
 import { Bindings } from './types'
 import { NanoDrop } from './nanodrop'
+import { deriveAddress, derivePublicKey } from 'nanocurrency'
 
 export { NanoDrop } from './nanodrop'
 
@@ -18,7 +19,13 @@ app.options('*', c => {
 })
 
 app.use('*', async c => {
-	const id = c.env.DURABLE_OBJECT.idFromName(`nanodrop-${NanoDrop.version}`)
+	const publicKey = derivePublicKey(c.env.PRIVATE_KEY)
+	const account = deriveAddress(publicKey)
+
+	const id = c.env.DURABLE_OBJECT.idFromName(
+		`nanodrop-${NanoDrop.version}-${account}`,
+	)
+
 	const obj = c.env.DURABLE_OBJECT.get(id)
 
 	const response = await obj.fetch(c.req.url, {
