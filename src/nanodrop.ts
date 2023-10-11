@@ -12,7 +12,7 @@ import {
 	signBlock,
 	verifyBlock,
 } from 'nanocurrency'
-import { TunedBigNumber, isValidIPv4OrIpv6 } from './utils'
+import { TunedBigNumber, formatNanoAddress, isValidIPv4OrIpv6 } from './utils'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 const MIN_DROP_AMOUNT = 0.000001
@@ -166,6 +166,8 @@ export class NanoDrop implements DurableObject {
 					return c.json({ error: 'Ticket is required' }, 400)
 				}
 
+				const account = formatNanoAddress(payload.account)
+
 				const {
 					hash: ticketHash,
 					amount,
@@ -201,9 +203,8 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const accountIsInTmpBlacklist = await this.accountIsInTmpBlacklist(
-					payload.account,
-				)
+				const accountIsInTmpBlacklist =
+					await this.accountIsInTmpBlacklist(account)
 
 				if (accountIsInTmpBlacklist) {
 					return c.json({ error: 'Limit reached for this account' }, 403)
@@ -233,7 +234,7 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const { hash } = await this.wallet.send(payload.account, amount)
+				const { hash } = await this.wallet.send(account, amount)
 
 				const timestamp = Date.now()
 
@@ -243,7 +244,7 @@ export class NanoDrop implements DurableObject {
 
 				this.saveDrop({
 					hash,
-					account: payload.account,
+					account,
 					amount,
 					ip,
 					timestamp,

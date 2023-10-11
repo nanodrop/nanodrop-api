@@ -11,3 +11,7 @@ export const isValidIPv4OrIpv6 = (ip: string) => {
 		? true
 		: false
 }
+
+export const formatNanoAddress = (address: string) => {
+	return address.replace('xrb_', 'nano_')
+}
