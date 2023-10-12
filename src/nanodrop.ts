@@ -360,6 +360,36 @@ export class NanoDrop implements DurableObject {
 			}
 			return c.json({ success: true })
 		})
+
+		this.app.get('/whitelist/account', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+			const accountWhitelist =
+				(await this.storage.get<string[]>('account-whitelist')) || []
+			return c.json(accountWhitelist)
+		})
+
+		this.app.put('/whitelist/account/:account', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+			const account = c.req.param('account')
+
+			if (!checkAddress(account)) {
+				return c.json({ error: 'Invalid account' }, 400)
+			}
+
+			const accountWhitelist =
+				(await this.storage.get<string[]>('account-whitelist')) || []
+			if (!accountWhitelist.includes(account)) {
+				await this.storage.put('account-whitelist', [
+					...accountWhitelist,
+					formatNanoAddress(account),
+				])
+			}
+			return c.json({ success: true })
+		})
 	}
 
 	async init() {
