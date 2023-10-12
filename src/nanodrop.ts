@@ -168,6 +168,10 @@ export class NanoDrop implements DurableObject {
 
 				const account = formatNanoAddress(payload.account)
 
+				if (account === this.wallet.account) {
+					return c.json({ error: 'I cannot send to myself' }, 400)
+				}
+
 				const {
 					hash: ticketHash,
 					amount,
