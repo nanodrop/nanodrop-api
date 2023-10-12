@@ -342,6 +342,9 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.put('/whitelist/ip/:ipAddress', async c => {
+			/*
+				IP whitelist allows faucet testing by Admin
+			*/
 			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
 				return c.json({ error: 'Unauthorized' }, 401)
 			}
@@ -371,6 +374,9 @@ export class NanoDrop implements DurableObject {
 		})
 
 		this.app.put('/whitelist/account/:account', async c => {
+			/*
+				Account whitelist allows faucet testing by Admin
+			*/
 			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
 				return c.json({ error: 'Unauthorized' }, 401)
 			}
