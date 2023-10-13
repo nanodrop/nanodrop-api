@@ -246,6 +246,12 @@ export class NanoDrop implements DurableObject {
 				const dequeue = await this.enqueueIPTicket(ip)
 
 				try {
+					const ipIsInTmpBlacklist = await this.ipIsInTmpBlacklist(ip)
+
+					if (ipIsInTmpBlacklist) {
+						return c.json({ error: 'Limit reached for this IP' }, 403)
+					}
+
 					const { hash } = await this.wallet.send(account, amount)
 
 					const timestamp = Date.now()
@@ -261,10 +267,12 @@ export class NanoDrop implements DurableObject {
 						ip,
 						timestamp,
 						took,
+					}).finally(() => {
+						dequeue()
 					})
 
 					return c.json({ hash, amount })
-				} finally {
+				} catch {
 					dequeue()
 				}
 			} catch (error) {
@@ -366,6 +374,8 @@ export class NanoDrop implements DurableObject {
 			if (!isValidIP) {
 				return c.json({ error: 'Invalid IP' }, 400)
 			}
+
+			this.removeIPFromTmpBlacklist(ip)
 
 			const ipWhitelist =
 				(await this.storage.get<string[]>('ip-whitelist')) || []
@@ -644,12 +654,19 @@ export class NanoDrop implements DurableObject {
 		timestamp: number
 		took: number
 	}) {
-		const [dropsCount] = await this.db.batch<Record<string, any>>([
+		const [dropsCountResult, ipCountResult] = await this.db.batch<
+			Record<string, any>
+		>([
 			this.db
 				.prepare(
 					'SELECT COUNT(*) as count FROM drops WHERE account = ?1 AND timestamp >= ?2',
 				)
 				.bind(data.account, Date.now() - PERIOD),
+			this.db
+				.prepare(
+					'SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2',
+				)
+				.bind(data.ip, Date.now() - PERIOD),
 			this.db
 				.prepare(
 					'INSERT INTO drops (hash, account, amount, ip, timestamp, took) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
@@ -664,15 +681,27 @@ export class NanoDrop implements DurableObject {
 				),
 		])
 
-		const count = dropsCount.results
-			? (dropsCount.results[0].count as number)
+		const dropsCount = dropsCountResult.results
+			? (dropsCountResult.results[0].count as number)
 			: 0
 
-		if (count + 1 >= MAX_DROPS_PER_ACCOUNT) {
+		if (dropsCount + 1 >= MAX_DROPS_PER_ACCOUNT) {
 			const accountWhitelist =
 				(await this.storage.get<string[]>('account-whitelist')) || []
 			if (!accountWhitelist.includes(data.account)) {
 				await this.addAccountToTmpBlacklist(data.account)
+			}
+		}
+
+		const ipCount = ipCountResult.results
+			? (ipCountResult.results[0].count as number)
+			: 0
+
+		if (ipCount + 1 >= MAX_DROPS_PER_IP) {
+			const ipWhitelist =
+				(await this.storage.get<string[]>('ip-whitelist')) || []
+			if (!ipWhitelist.includes(data.ip)) {
+				await this.addIPToTmpBlacklist(data.ip)
 			}
 		}
 	}
@@ -740,6 +769,47 @@ export class NanoDrop implements DurableObject {
 			'temporary-account-blacklist',
 			blacklistedAccounts.filter(a => a !== checksum),
 		)
+	}
+
+	async ipIsInTmpBlacklist(ip: string): Promise<boolean> {
+		const blacklistedIPs =
+			(await this.storage.get<Record<string, number>>(
+				'temporary-ip-blacklist',
+			)) || {}
+		if (blacklistedIPs[ip] < Date.now()) return true
+		return false
+	}
+
+	async addIPToTmpBlacklist(ip: string) {
+		/*
+			Since tickets already checks IPs, we should only
+			ensure invalidation of non-expired yet tickets.
+			Also, clean expired entries to free storage memory.
+		*/
+		const blacklistedIPs =
+			(await this.storage.get<Record<string, number>>(
+				'temporary-ip-blacklist',
+			)) || {}
+		const now = Date.now()
+		const nonExpiredIPs = Object.entries(blacklistedIPs).filter(
+			([, expiresAt]) => expiresAt > now,
+		)
+		const expiresAt = now + TICKET_EXPIRATION
+		await this.storage.put('temporary-ip-blacklist', {
+			...Object.fromEntries(nonExpiredIPs),
+			[ip]: expiresAt,
+		})
+	}
+
+	async removeIPFromTmpBlacklist(ip: string) {
+		const blacklistedIPs =
+			(await this.storage.get<Record<string, number>>(
+				'temporary-ip-blacklist',
+			)) || {}
+		if (ip in blacklistedIPs) {
+			delete blacklistedIPs[ip]
+			await this.storage.put('temporary-ip-blacklist', blacklistedIPs)
+		}
 	}
 
 	fetch(request: Request) {
