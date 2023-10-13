@@ -619,7 +619,11 @@ export class NanoDrop implements DurableObject {
 			: 0
 
 		if (count + 1 >= MAX_DROPS_PER_ACCOUNT) {
-			await this.tmpBlacklistAccount(data.account)
+			const accountWhitelist =
+				(await this.storage.get<string[]>('account-whitelist')) || []
+			if (!accountWhitelist.includes(data.account)) {
+				await this.tmpBlacklistAccount(data.account)
+			}
 		}
 	}
 
