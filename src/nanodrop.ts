@@ -434,6 +434,29 @@ export class NanoDrop implements DurableObject {
 
 			return c.json({ success: true })
 		})
+
+		this.app.delete('/whitelist/account/:account', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+
+			if (!checkAddress(c.req.param('account'))) {
+				return c.json({ error: 'Invalid account' }, 400)
+			}
+
+			const account = formatNanoAddress(c.req.param('account'))
+
+			const accountWhitelist =
+				(await this.storage.get<string[]>('account-whitelist')) || []
+			if (accountWhitelist.includes(account)) {
+				await this.storage.put(
+					'account-whitelist',
+					accountWhitelist.filter(accountAddress => accountAddress !== account),
+				)
+			}
+
+			return c.json({ success: true })
+		})
 	}
 
 	async init() {
