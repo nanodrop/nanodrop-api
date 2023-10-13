@@ -397,6 +397,8 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'Invalid account' }, 400)
 			}
 
+			await this.removeAccountFromTmpBlacklist(account)
+
 			const accountWhitelist =
 				(await this.storage.get<string[]>('account-whitelist')) || []
 			if (!accountWhitelist.includes(account)) {
@@ -405,6 +407,7 @@ export class NanoDrop implements DurableObject {
 					formatNanoAddress(account),
 				])
 			}
+
 			return c.json({ success: true })
 		})
 	}
@@ -679,6 +682,17 @@ export class NanoDrop implements DurableObject {
 		}
 		blacklistedAccounts.push(checksum)
 		await this.storage.put('temporary-account-blacklist', blacklistedAccounts)
+	}
+
+	async removeAccountFromTmpBlacklist(account: string) {
+		const checksum = account.slice(-8)
+		const blacklistedAccounts =
+			(await this.storage.get<string[]>('temporary-account-blacklist')) || []
+		if (!blacklistedAccounts.includes(checksum)) return
+		await this.storage.put(
+			'temporary-account-blacklist',
+			blacklistedAccounts.filter(a => a !== checksum),
+		)
 	}
 
 	fetch(request: Request) {
