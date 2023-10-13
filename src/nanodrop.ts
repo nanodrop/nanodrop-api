@@ -375,6 +375,29 @@ export class NanoDrop implements DurableObject {
 			return c.json({ success: true })
 		})
 
+		this.app.delete('/whitelist/ip/:ipAddress', async c => {
+			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
+				return c.json({ error: 'Unauthorized' }, 401)
+			}
+			const ip = c.req.param('ipAddress')
+
+			const isValidIP = isValidIPv4OrIpv6(ip)
+
+			if (!isValidIP) {
+				return c.json({ error: 'Invalid IP' }, 400)
+			}
+
+			const ipWhitelist =
+				(await this.storage.get<string[]>('ip-whitelist')) || []
+			if (ipWhitelist.includes(ip)) {
+				await this.storage.put(
+					'ip-whitelist',
+					ipWhitelist.filter(ipAddress => ipAddress !== ip),
+				)
+			}
+			return c.json({ success: true })
+		})
+
 		this.app.get('/whitelist/account', async c => {
 			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
 				return c.json({ error: 'Unauthorized' }, 401)
