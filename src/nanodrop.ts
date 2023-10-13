@@ -212,37 +212,6 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const accountIsInTmpBlacklist =
-					await this.accountIsInTmpBlacklist(account)
-
-				if (accountIsInTmpBlacklist) {
-					return c.json({ error: 'Limit reached for this account' }, 403)
-				}
-
-				if (verificationRequired) {
-					if (!payload.turnstileToken) {
-						return c.json({ error: 'Turnstile token is missing' }, 400)
-					}
-
-					const formData = new FormData()
-					formData.append('secret', env.TURNSTILE_SECRET)
-					formData.append('response', payload.turnstileToken)
-					formData.append('remoteip', ip)
-
-					const url =
-						'https://challenges.cloudflare.com/turnstile/v0/siteverify'
-					const result = await fetch(url, {
-						body: formData,
-						method: 'POST',
-					})
-
-					const outcome = await result.json<{ success: boolean }>()
-
-					if (!outcome.success) {
-						return c.json({ error: 'Turnstile token failed' }, 400)
-					}
-				}
-
 				const dequeue = await this.enqueueIPTicket(ip)
 
 				try {
@@ -250,6 +219,37 @@ export class NanoDrop implements DurableObject {
 
 					if (ipIsInTmpBlacklist) {
 						return c.json({ error: 'Limit reached for this IP' }, 403)
+					}
+
+					const accountIsInTmpBlacklist =
+						await this.accountIsInTmpBlacklist(account)
+
+					if (accountIsInTmpBlacklist) {
+						return c.json({ error: 'Limit reached for this account' }, 403)
+					}
+
+					if (verificationRequired) {
+						if (!payload.turnstileToken) {
+							return c.json({ error: 'Turnstile token is missing' }, 400)
+						}
+
+						const formData = new FormData()
+						formData.append('secret', env.TURNSTILE_SECRET)
+						formData.append('response', payload.turnstileToken)
+						formData.append('remoteip', ip)
+
+						const url =
+							'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+						const result = await fetch(url, {
+							body: formData,
+							method: 'POST',
+						})
+
+						const outcome = await result.json<{ success: boolean }>()
+
+						if (!outcome.success) {
+							return c.json({ error: 'Turnstile token failed' }, 400)
+						}
 					}
 
 					const { hash } = await this.wallet.send(account, amount)
