@@ -243,7 +243,7 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const dequeue = await this.enqueueIPTicket(ip, ticket)
+				const dequeue = await this.enqueueIPTicket(ip)
 
 				try {
 					const { hash } = await this.wallet.send(account, amount)
@@ -677,7 +677,7 @@ export class NanoDrop implements DurableObject {
 		}
 	}
 
-	async enqueueIPTicket(ip: string, ticket: string): Promise<() => void> {
+	async enqueueIPTicket(ip: string): Promise<() => void> {
 		if (!(ip in this.ipTicketQueue)) {
 			this.ipTicketQueue[ip] = []
 		}
