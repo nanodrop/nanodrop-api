@@ -13,6 +13,7 @@ import {
 	verifyBlock,
 } from 'nanocurrency'
 import { TunedBigNumber, formatNanoAddress, isValidIPv4OrIpv6 } from './utils'
+import { HTTPException } from 'hono/http-exception'
 
 const TICKET_EXPIRATION = 1000 * 60 * 5 // 5 minutes
 const MIN_DROP_AMOUNT = 0.000001
@@ -20,6 +21,7 @@ const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
+const MAX_DROP_PER_IP_SIMULTANEOUSLY = 3
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
 const VERIFICATION_REQUIRED_BY_DEFAULT = false
 const MAX_DROPS_PER_ACCOUNT = 3
@@ -33,6 +35,7 @@ export class NanoDrop implements DurableObject {
 	static version = 'v0.1.0-alpha.1'
 	env: 'development' | 'production'
 	db: D1Database
+	ipTicketQueue: Record<string, Promise<void>[]> = {}
 
 	constructor(state: DurableObjectState, env: Bindings) {
 		this.env = env.ENVIRONMENT
@@ -172,13 +175,15 @@ export class NanoDrop implements DurableObject {
 					return c.json({ error: 'I cannot send to myself' }, 400)
 				}
 
+				const ticket = payload.ticket
+
 				const {
 					hash: ticketHash,
 					amount,
 					ip,
 					expiresAt,
 					verificationRequired,
-				} = await this.parseTicket(payload.ticket)
+				} = await this.parseTicket(ticket)
 
 				if (expiresAt < Date.now()) {
 					throw new Error('Ticket expired')
@@ -238,24 +243,30 @@ export class NanoDrop implements DurableObject {
 					}
 				}
 
-				const { hash } = await this.wallet.send(account, amount)
+				const dequeue = await this.enqueueIPTicket(ip, ticket)
 
-				const timestamp = Date.now()
+				try {
+					const { hash } = await this.wallet.send(account, amount)
 
-				const took = timestamp - startedAt
+					const timestamp = Date.now()
 
-				this.redeemTicket({ hash: ticketHash, expiresAt })
+					const took = timestamp - startedAt
 
-				this.saveDrop({
-					hash,
-					account,
-					amount,
-					ip,
-					timestamp,
-					took,
-				})
+					this.redeemTicket({ hash: ticketHash, expiresAt })
 
-				return c.json({ hash, amount })
+					this.saveDrop({
+						hash,
+						account,
+						amount,
+						ip,
+						timestamp,
+						took,
+					})
+
+					return c.json({ hash, amount })
+				} finally {
+					dequeue()
+				}
 			} catch (error) {
 				if (
 					error instanceof Error &&
@@ -609,6 +620,34 @@ export class NanoDrop implements DurableObject {
 
 		if (count + 1 >= MAX_DROPS_PER_ACCOUNT) {
 			await this.tmpBlacklistAccount(data.account)
+		}
+	}
+
+	async enqueueIPTicket(ip: string, ticket: string): Promise<() => void> {
+		if (!(ip in this.ipTicketQueue)) {
+			this.ipTicketQueue[ip] = []
+		}
+
+		const promises = [...this.ipTicketQueue[ip]]
+
+		if (promises.length === MAX_DROP_PER_IP_SIMULTANEOUSLY) {
+			throw new HTTPException(403, { message: 'Many simultaneous requests' })
+		}
+
+		let resolve = () => {
+			return
+		}
+		const promise = new Promise<void>(res => {
+			resolve = () => res()
+		})
+
+		this.ipTicketQueue[ip].push(promise)
+
+		await Promise.all(promises)
+
+		return () => {
+			resolve()
+			this.ipTicketQueue[ip] = this.ipTicketQueue[ip].filter(p => p !== promise)
 		}
 	}
 
