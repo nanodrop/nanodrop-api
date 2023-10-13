@@ -391,11 +391,12 @@ export class NanoDrop implements DurableObject {
 			if (c.req.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
 				return c.json({ error: 'Unauthorized' }, 401)
 			}
-			const account = c.req.param('account')
 
-			if (!checkAddress(account)) {
+			if (!checkAddress(c.req.param('account'))) {
 				return c.json({ error: 'Invalid account' }, 400)
 			}
+
+			const account = formatNanoAddress(c.req.param('account'))
 
 			await this.removeAccountFromTmpBlacklist(account)
 
@@ -404,7 +405,7 @@ export class NanoDrop implements DurableObject {
 			if (!accountWhitelist.includes(account)) {
 				await this.storage.put('account-whitelist', [
 					...accountWhitelist,
-					formatNanoAddress(account),
+					account,
 				])
 			}
 
