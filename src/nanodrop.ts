@@ -272,8 +272,9 @@ export class NanoDrop implements DurableObject {
 					})
 
 					return c.json({ hash, amount })
-				} catch {
+				} catch (error) {
 					dequeue()
+					throw error
 				}
 			} catch (error) {
 				if (
