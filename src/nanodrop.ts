@@ -622,7 +622,7 @@ export class NanoDrop implements DurableObject {
 			const accountWhitelist =
 				(await this.storage.get<string[]>('account-whitelist')) || []
 			if (!accountWhitelist.includes(data.account)) {
-				await this.tmpBlacklistAccount(data.account)
+				await this.addAccountToTmpBlacklist(data.account)
 			}
 		}
 	}
@@ -655,7 +655,15 @@ export class NanoDrop implements DurableObject {
 		}
 	}
 
-	async tmpBlacklistAccount(account: string) {
+	async accountIsInTmpBlacklist(account: string) {
+		const checksum = account.slice(-8)
+		const blacklistedAccounts =
+			(await this.storage.get<string[]>('temporary-account-blacklist')) || []
+		if (blacklistedAccounts.includes(checksum)) return true
+		return false
+	}
+
+	async addAccountToTmpBlacklist(account: string) {
 		// Durable Objects applies a 128 KiB limit for storing values.
 		// That's why it's preferable to just store the checksums for each account, since
 		// the possibility of 2 accounts checksum having the same array is 1 in 32 ** 8.
@@ -671,14 +679,6 @@ export class NanoDrop implements DurableObject {
 		}
 		blacklistedAccounts.push(checksum)
 		await this.storage.put('temporary-account-blacklist', blacklistedAccounts)
-	}
-
-	async accountIsInTmpBlacklist(account: string) {
-		const checksum = account.slice(-8)
-		const blacklistedAccounts =
-			(await this.storage.get<string[]>('temporary-account-blacklist')) || []
-		if (blacklistedAccounts.includes(checksum)) return true
-		return false
 	}
 
 	fetch(request: Request) {
