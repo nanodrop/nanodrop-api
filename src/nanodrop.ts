@@ -99,10 +99,10 @@ export class NanoDrop implements DurableObject {
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
 
-				const country =
+				const countryCode =
 					this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
 
-				if (!country) {
+				if (!countryCode) {
 					return c.json({ error: 'Country header is missing' }, 400)
 				}
 
@@ -119,9 +119,9 @@ export class NanoDrop implements DurableObject {
 				}
 
 				await env.DB.prepare(
-					'INSERT INTO ip_info (ip, country, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
+					'INSERT INTO ip_info (ip, country_code, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
 				)
-					.bind(ip, country, isProxy ? 1 : 0, proxyCheckedBy)
+					.bind(ip, countryCode, isProxy ? 1 : 0, proxyCheckedBy)
 					.run()
 			} else {
 				isProxy = ipInfo.results[0].is_proxy ? true : false
@@ -305,7 +305,7 @@ export class NanoDrop implements DurableObject {
 			}
 			const { results } = await env.DB.prepare(
 				`
-                SELECT hash, account, amount, took, timestamp, ip_info.country, ip_info.is_proxy
+                SELECT hash, account, amount, took, timestamp, ip_info.country_code, ip_info.is_proxy
                 FROM drops
                 INNER JOIN ip_info ON drops.ip = ip_info.ip
 				ORDER BY timestamp ${orderBy}
