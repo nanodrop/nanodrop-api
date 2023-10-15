@@ -215,10 +215,12 @@ export class NanoDrop implements DurableObject {
 				const dequeue = await this.enqueueIPTicket(ip)
 
 				try {
-					const ipIsInTmpBlacklist = await this.ipIsInTmpBlacklist(ip)
+					if (this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV) {
+						const ipIsInTmpBlacklist = await this.ipIsInTmpBlacklist(ip)
 
-					if (ipIsInTmpBlacklist) {
-						return c.json({ error: 'Limit reached for this IP' }, 403)
+						if (ipIsInTmpBlacklist) {
+							return c.json({ error: 'Limit reached for this IP' }, 403)
+						}
 					}
 
 					const accountIsInTmpBlacklist =
@@ -686,7 +688,10 @@ export class NanoDrop implements DurableObject {
 			? (dropsCountResult.results[0].count as number)
 			: 0
 
-		if (dropsCount + 1 >= MAX_DROPS_PER_ACCOUNT) {
+		if (
+			dropsCount + 1 >= MAX_DROPS_PER_ACCOUNT &&
+			(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
+		) {
 			const accountWhitelist =
 				(await this.storage.get<string[]>('account-whitelist')) || []
 			if (!accountWhitelist.includes(data.account)) {
