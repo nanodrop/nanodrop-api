@@ -10,17 +10,6 @@ bindings = [
 tag = "v1" # Should be unique for each entry
 new_classes = ["NanoDrop"]
 
-[[queues.producers]]
-  queue = "nanodrop-queue"
-  binding = "HONO_QUEUE"
-
-[[queues.consumers]]
-  queue = "nanodrop-queue"
-  max_batch_size = 1
-  max_batch_timeout = 5 # seconds
-  max_retries = 0
-  dead_letter_queue = "nanodrop-queue-dead"
-
 [[d1_databases]]
 binding = "DB" # i.e. available in your Worker on env.DB
 database_name = "nanodrop"

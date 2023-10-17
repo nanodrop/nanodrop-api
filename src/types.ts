@@ -1,6 +1,5 @@
 export type Bindings = {
 	ENVIRONMENT: 'development' | 'production'
-	HONO_QUEUE: Queue<any>
 	DURABLE_OBJECT: DurableObjectNamespace
 	DB: D1Database
 	RPC_URLS: string

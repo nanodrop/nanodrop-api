@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import queue from './queue'
 import { Bindings } from './types'
 import { NanoDrop } from './nanodrop'
 import { deriveAddress, derivePublicKey } from 'nanocurrency'
@@ -49,5 +48,4 @@ app.use('*', async c => {
 
 export default {
 	fetch: app.fetch,
-	queue,
 }
