@@ -321,6 +321,22 @@ export class NanoDrop implements DurableObject {
 			)
 		})
 
+		this.app.get('/drops/countries', async c => {
+			const { results } = await env.DB.prepare(
+				`
+				SELECT *
+				FROM drops_by_country
+			`,
+			).all<{ country_code: string; count: number }>()
+
+			return c.json(
+				Object.fromEntries(
+					results?.map(({ country_code, count }) => [country_code, count]) ||
+						[],
+				),
+			)
+		})
+
 		this.app.get('/wallet', c => {
 			const { balance, receivable, frontier, representative } =
 				this.wallet.state
