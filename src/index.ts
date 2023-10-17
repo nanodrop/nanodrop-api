@@ -2,10 +2,11 @@ import { Hono } from 'hono'
 import { Bindings } from './types'
 import { NanoDrop } from './nanodrop'
 import { deriveAddress, derivePublicKey } from 'nanocurrency'
+import { errorHandler } from './middlewares'
 
 export { NanoDrop } from './nanodrop'
 
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
 
 app.options('*', c => {
 	return c.text('', 204, {
