@@ -33,12 +33,12 @@ export class NanoDrop implements DurableObject {
 	wallet: NanoWallet
 	storage: DurableObjectStorage
 	static version = 'v0.1.0-alpha.1'
-	env: 'development' | 'production'
 	db: D1Database
 	ipTicketQueue: Record<string, Promise<void>[]> = {}
+	isDev: boolean
 
 	constructor(state: DurableObjectState, env: Bindings) {
-		this.env = env.ENVIRONMENT
+		this.isDev = env.__DEV__ === 'true'
 
 		this.storage = state.storage
 
@@ -64,10 +64,7 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'Origin mismatch' }, 400)
 			}
 
-			const ip =
-				this.env === 'development'
-					? '127.0.0.1'
-					: c.req.headers.get('x-real-ip')
+			const ip = this.isDev ? '127.0.0.1' : c.req.headers.get('x-real-ip')
 			if (!ip) {
 				return c.json({ error: 'IP header is missing' }, 400)
 			}
@@ -85,7 +82,7 @@ export class NanoDrop implements DurableObject {
 
 			if (
 				count >= MAX_DROPS_PER_IP &&
-				(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
+				(!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV)
 			) {
 				const ipWhitelist =
 					(await this.storage.get<string[]>('ip-whitelist')) || []
@@ -99,8 +96,9 @@ export class NanoDrop implements DurableObject {
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
 
-				const countryCode =
-					this.env === 'development' ? '**' : c.req.headers.get('cf-ipcountry')
+				const countryCode = this.isDev
+					? '**'
+					: c.req.headers.get('cf-ipcountry')
 
 				if (!countryCode) {
 					return c.json({ error: 'Country header is missing' }, 400)
@@ -108,7 +106,7 @@ export class NanoDrop implements DurableObject {
 
 				let proxyCheckedBy = 'nanodrop'
 
-				if (this.env !== 'development') {
+				if (!this.isDev) {
 					try {
 						isProxy = await this.checkProxy(ip)
 						proxyCheckedBy = 'badip.info'
@@ -189,7 +187,7 @@ export class NanoDrop implements DurableObject {
 					throw new Error('Ticket expired')
 				}
 
-				if (this.env !== 'development') {
+				if (!this.isDev) {
 					const realIp = c.req.headers.get('x-real-ip')
 					if (!realIp) {
 						return c.json({ error: 'IP header is missing' }, 400)
@@ -215,7 +213,7 @@ export class NanoDrop implements DurableObject {
 				const dequeue = await this.enqueueIPTicket(ip)
 
 				try {
-					if (this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV) {
+					if (!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV) {
 						const ipIsInTmpBlacklist = await this.ipIsInTmpBlacklist(ip)
 
 						if (ipIsInTmpBlacklist) {
@@ -706,7 +704,7 @@ export class NanoDrop implements DurableObject {
 
 		if (
 			dropsCount + 1 >= MAX_DROPS_PER_ACCOUNT &&
-			(this.env !== 'development' || ENABLE_LIMIT_PER_IP_IN_DEV)
+			(!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV)
 		) {
 			const accountWhitelist =
 				(await this.storage.get<string[]>('account-whitelist')) || []

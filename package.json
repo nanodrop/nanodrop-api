@@ -3,8 +3,8 @@
 	"author": "anarkrypto <anarkrypto@gmail.com>",
 	"version": "0.1.0-beta.1",
 	"scripts": {
-		"dev": "wrangler dev src/index.ts --port 8787 --var ENVIRONMENT:development",
-		"deploy": "wrangler deploy --minify src/index.ts --var ENVIRONMENT:production",
+		"dev": "wrangler dev src/index.ts --port 8787",
+		"deploy": "wrangler deploy --minify src/index.ts",
 		"format": "prettier --config .prettierrc.json --write ."
 	},
 	"dependencies": {

@@ -1,5 +1,5 @@
 export type Bindings = {
-	ENVIRONMENT: 'development' | 'production'
+	__DEV__: string
 	DURABLE_OBJECT: DurableObjectNamespace
 	DB: D1Database
 	RPC_URLS: string
