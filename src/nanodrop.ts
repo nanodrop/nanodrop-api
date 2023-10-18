@@ -490,6 +490,8 @@ export class NanoDrop implements DurableObject {
 		const walletState = await this.storage.get<NanoWalletState>('wallet-state')
 		if (walletState) {
 			this.wallet.update(walletState)
+		} else {
+			this.wallet.sync()
 		}
 		this.wallet.subscribe(state => {
 			this.storage.put('wallet-state', state)
