@@ -309,22 +309,34 @@ export class NanoDrop implements DurableObject {
 			if (isNaN(offset) || offset < 0) {
 				return c.json({ error: 'Invalid offset' }, 400)
 			}
-			const { results } = await env.DB.prepare(
-				`
-                SELECT hash, account, amount, took, timestamp, ip_info.country_code, ip_info.is_proxy
-                FROM drops
-                INNER JOIN ip_info ON drops.ip = ip_info.ip
-				ORDER BY timestamp ${orderBy}
-				LIMIT ${limit}
-				OFFSET ${offset}
-            `,
-			).all<DropData>()
-			return c.json(
-				results?.map(drop => ({
+
+			const [count, data] = await this.db.batch<Record<string, any>>([
+				this.db.prepare('SELECT COUNT(*) as count FROM drops'),
+				this.db.prepare(`
+					SELECT hash, account, amount, took, timestamp, ip_info.country_code, ip_info.is_proxy
+					FROM drops
+					INNER JOIN ip_info ON drops.ip = ip_info.ip
+					ORDER BY timestamp ${orderBy}
+					LIMIT ${limit}
+					OFFSET ${offset}
+				`),
+			])
+
+			const total = count.results ? (count.results[0].count as number) : 0
+
+			const drops =
+				data.results?.map(drop => ({
 					...drop,
 					is_proxy: drop.is_proxy ? true : false,
-				})) || [],
-			)
+				})) || []
+
+			return c.json({
+				total,
+				orderBy,
+				limit,
+				offset,
+				drops,
+			})
 		})
 
 		this.app.get('/drops/countries', async c => {
