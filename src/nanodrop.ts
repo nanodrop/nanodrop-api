@@ -97,14 +97,14 @@ export class NanoDrop implements DurableObject {
 				// Retrieve IP info and save on db only the first time
 
 				const countryCode = this.isDev
-					? '**'
+					? '??'
 					: c.req.headers.get('cf-ipcountry')
 
 				if (!countryCode) {
 					return c.json({ error: 'Country header is missing' }, 400)
 				}
 
-				let proxyCheckedBy = 'nanodrop'
+				let proxyCheckedBy = 'badip.info'
 
 				if (!this.isDev) {
 					try {
