@@ -27,6 +27,7 @@ const VERIFICATION_REQUIRED_BY_DEFAULT = false
 const MAX_DROPS_PER_ACCOUNT = 3
 const MAX_TMP_ACCOUNT_BLACKLIST_LENGTH = 10000
 const BAN_PROXIES = false
+const PROXY_AMOUNT_DIVIDE_BY = 10
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -129,10 +130,17 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'Proxies are not allowed' }, 403)
 			}
 
-			const amount = this.getDropAmount()
-			if (amount === '0') {
+			const defaultAmount = this.getDropAmount()
+			if (defaultAmount === '0') {
 				return c.json({ error: 'Insufficient balance' }, 500)
 			}
+
+			const amount = isProxy
+				? TunedBigNumber(defaultAmount)
+						.dividedBy(PROXY_AMOUNT_DIVIDE_BY)
+						.toString(10)
+				: defaultAmount
+
 			const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
 			const expiresAt = Date.now() + TICKET_EXPIRATION
 			const verificationRequired = isProxy || VERIFICATION_REQUIRED_BY_DEFAULT
