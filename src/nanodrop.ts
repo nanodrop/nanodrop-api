@@ -601,8 +601,8 @@ export class NanoDrop implements DurableObject {
 		const { ip, amount, version, expiresAt, verificationRequired, signature } =
 			data
 
-		if (version < 1) {
-			throw new Error('Old ticket version')
+		if (version !== 1) {
+			throw new Error('Invalid ticket version')
 		}
 
 		const isValidIP = isValidIPv4OrIpv6(ip)
