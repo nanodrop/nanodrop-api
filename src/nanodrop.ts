@@ -23,9 +23,10 @@ const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
 const MAX_DROP_PER_IP_SIMULTANEOUSLY = 3
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
-const VERIFICATION_REQUIRED_BY_DEFAULT = false
 const MAX_DROPS_PER_ACCOUNT = 3
 const MAX_TMP_ACCOUNT_BLACKLIST_LENGTH = 10000
+const VERIFICATION_REQUIRED_BY_DEFAULT = false
+const VERIFY_WHEN_PROXY = true
 const BAN_PROXIES = false
 const PROXY_AMOUNT_DIVIDE_BY = 10
 
@@ -143,7 +144,8 @@ export class NanoDrop implements DurableObject {
 
 			const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
 			const expiresAt = Date.now() + TICKET_EXPIRATION
-			const verificationRequired = isProxy || VERIFICATION_REQUIRED_BY_DEFAULT
+			const verificationRequired =
+				VERIFICATION_REQUIRED_BY_DEFAULT || (isProxy && VERIFY_WHEN_PROXY)
 			const ticket = await this.generateTicket(
 				ip,
 				amount,
