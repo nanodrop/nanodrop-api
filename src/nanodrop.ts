@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { Bindings, DropData } from './types'
+import { Bindings } from './types'
 import { NanoWalletState } from 'nano-wallet-js'
 import NanoWallet from 'nano-wallet-js'
 import { errorHandler } from './middlewares'
