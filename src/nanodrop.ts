@@ -29,6 +29,8 @@ const VERIFICATION_REQUIRED_BY_DEFAULT = false
 const VERIFY_WHEN_PROXY = true
 const BAN_PROXIES = false
 const PROXY_AMOUNT_DIVIDE_BY = 10
+const LIMITED_COUNTRIES: string[] = []
+const MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY = 2
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -71,6 +73,12 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'IP header is missing' }, 400)
 			}
 
+			const countryCode = this.isDev ? '??' : c.req.headers.get('cf-ipcountry')
+
+			if (!countryCode) {
+				return c.json({ error: 'Country header is missing' }, 400)
+			}
+
 			const [dropsCount, ipInfo] = await env.DB.batch<Record<string, any>>([
 				env.DB.prepare(
 					'SELECT COUNT(*) as count FROM drops WHERE ip = ?1 AND timestamp >= ?2',
@@ -83,7 +91,9 @@ export class NanoDrop implements DurableObject {
 				: 0
 
 			if (
-				count >= MAX_DROPS_PER_IP &&
+				(count >= MAX_DROPS_PER_IP ||
+					(LIMITED_COUNTRIES.includes(countryCode) &&
+						count >= MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY)) &&
 				(!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV)
 			) {
 				const ipWhitelist =
@@ -97,14 +107,6 @@ export class NanoDrop implements DurableObject {
 
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
-
-				const countryCode = this.isDev
-					? '??'
-					: c.req.headers.get('cf-ipcountry')
-
-				if (!countryCode) {
-					return c.json({ error: 'Country header is missing' }, 400)
-				}
 
 				let proxyCheckedBy = 'badip.info'
 
