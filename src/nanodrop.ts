@@ -108,12 +108,12 @@ export class NanoDrop implements DurableObject {
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
 
-				let proxyCheckedBy = 'badip.info'
+				let proxyCheckedBy = 'none'
 
 				if (!this.isDev) {
 					try {
 						isProxy = await this.checkProxy(ip)
-						proxyCheckedBy = 'badip.info'
+						proxyCheckedBy = 'badip.xyz'
 					} catch (error) {
 						// Do not throw
 						console.error(`Failed checking IP ${ip}`)
@@ -661,7 +661,7 @@ export class NanoDrop implements DurableObject {
 	}
 
 	async checkProxy(ip: string) {
-		const response = await fetch(`https://api.badip.info/${ip}?strategy=quick`)
+		const response = await fetch(`https://api.badip.xyz/${ip}?strategy=quick`)
 		if (!response.ok) {
 			throw new Error('Proxy check failed')
 		}
