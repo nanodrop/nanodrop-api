@@ -21,6 +21,7 @@ const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
+const MAX_DROPS_PER_PROXY_IP = 2
 const MAX_DROP_PER_IP_SIMULTANEOUSLY = 3
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
 const MAX_DROPS_PER_ACCOUNT = 3
@@ -132,6 +133,10 @@ export class NanoDrop implements DurableObject {
 
 			if (isProxy && BAN_PROXIES) {
 				return c.json({ error: 'Proxies are not allowed' }, 403)
+			}
+
+			if (isProxy && count >= MAX_DROPS_PER_PROXY_IP) {
+				return c.json({ error: 'Drop limit reached for your proxy' }, 403)
 			}
 
 			const defaultAmount = this.getDropAmount()
