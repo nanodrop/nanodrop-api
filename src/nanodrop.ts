@@ -331,13 +331,20 @@ export class NanoDrop implements DurableObject {
 					throw error
 				}
 			} catch (error) {
-				if (
-					error instanceof Error &&
-					(error.message === 'Fork' || error.message === 'Old block')
-				) {
-					// Fix fork and Old block syncing wallet
-					this.wallet.sync()
-				}
+				// There is a bug in the current implementation the causes fork and old block errors
+				// Another bug in the wallet RPC implementation causes the wallet do not detect forks and old blocks
+				// So we will always sync the wallet after an error
+				// TODO: Uncomment the lines below when we correctly detect forks and old blocks
+
+				// if (
+				// 	error instanceof Error &&
+				// 	(error.message.includes('Fork') ||
+				// 		error.message.includes('Old block'))
+				// ) {
+				// 	// Fix fork and Old block syncing wallet
+
+				this.wallet.sync()
+				// }
 				throw error
 			}
 		})
