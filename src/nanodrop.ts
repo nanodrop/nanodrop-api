@@ -77,6 +77,12 @@ export class NanoDrop implements DurableObject {
 
 			const countryCode = this.isDev ? '??' : c.req.headers.get('cf-ipcountry')
 
+			const origin = c.req.headers.get('origin') || 'Unknown'
+
+			if (origin.includes('api.nanodrop.io')) {
+				return c.json({ error: 'Temporarily unavailable due spam' }, 403)
+			}
+
 			if (!countryCode) {
 				return c.json({ error: 'Country header is missing' }, 400)
 			}
