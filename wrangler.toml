@@ -1,17 +1,30 @@
 name = "nanodrop-api"
-compatibility_date = "2023-01-01"
+compatibility_date = "2023-10-16"
 
-[durable_objects]
-bindings = [
-  { name = "DURABLE_OBJECT", class_name = "NanoDrop" } # Binding to our NanoDrop class
+durable_objects.bindings = [
+  { name = "DURABLE_OBJECT", class_name = "NanoDrop" },
+]
+
+d1_databases = [
+  { binding = "DB", database_name = "nanodrop", database_id = "7b743cba-ec52-4a8d-be05-1d8a1e7859ab" },
+]
+
+[env.staging]
+
+durable_objects.bindings = [
+  { name = "DURABLE_OBJECT", class_name = "NanoDrop" },
+]
+
+[env.production]
+
+durable_objects.bindings = [
+  { name = "DURABLE_OBJECT", class_name = "NanoDrop" },
+]
+
+d1_databases = [
+  { binding = "DB", database_name = "nanodrop-prod", database_id = "4150bedd-0180-4e7d-a561-c9a922ee1eb7" },
 ]
 
 [[migrations]]
-tag = "v1" # Should be unique for each entry
+tag = "v1"
 new_classes = ["NanoDrop"]
-
-[[d1_databases]]
-binding = "DB" # i.e. available in your Worker on env.DB
-database_name = "nanodrop"
-database_id = ""
-migrations_dir = "migrations"
