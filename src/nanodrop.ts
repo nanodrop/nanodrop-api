@@ -32,6 +32,7 @@ const BAN_PROXIES = false
 const PROXY_AMOUNT_DIVIDE_BY = 10
 const LIMITED_COUNTRIES: string[] = []
 const MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY = 2
+const VERIFICATION_METHOD: 'hcaptcha' | 'turnstile' = 'hcaptcha'
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -254,26 +255,54 @@ export class NanoDrop implements DurableObject {
 					}
 
 					if (verificationRequired) {
-						if (!payload.turnstileToken) {
-							return c.json({ error: 'Turnstile token is missing' }, 400)
+						if (VERIFICATION_METHOD === 'turnstile') {
+							if (!payload.turnstileToken) {
+								return c.json({ error: 'Turnstile token is missing' }, 400)
+							}
+
+							if (!env.TURNSTILE_SECRET) {
+								return c.json({ error: 'Turnstile secret is missing' }, 500)
+							}
+
+							const formData = new FormData()
+							formData.append('secret', env.TURNSTILE_SECRET)
+							formData.append('response', payload.turnstileToken)
+							formData.append('remoteip', ip)
+
+							const url =
+								'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+							const result = await fetch(url, {
+								body: formData,
+								method: 'POST',
+							})
+
+							const outcome = await result.json<{ success: boolean }>()
+
+							if (!outcome.success) {
+								return c.json({ error: 'Turnstile token failed' }, 400)
+							}
 						}
 
-						const formData = new FormData()
-						formData.append('secret', env.TURNSTILE_SECRET)
-						formData.append('response', payload.turnstileToken)
-						formData.append('remoteip', ip)
+						if (VERIFICATION_METHOD === 'hcaptcha') {
+							if (!env.HCAPTCHA_SECRET) {
+								return c.json({ error: 'Hcaptcha secret is missing' }, 500)
+							}
 
-						const url =
-							'https://challenges.cloudflare.com/turnstile/v0/siteverify'
-						const result = await fetch(url, {
-							body: formData,
-							method: 'POST',
-						})
+							const formData = new FormData()
+							formData.append('secret', env.HCAPTCHA_SECRET)
+							formData.append('response', payload.turnstileToken)
 
-						const outcome = await result.json<{ success: boolean }>()
+							const url = 'https://api.hcaptcha.com/siteverify'
+							const result = await fetch(url, {
+								body: formData,
+								method: 'POST',
+							})
 
-						if (!outcome.success) {
-							return c.json({ error: 'Turnstile token failed' }, 400)
+							const outcome = await result.json<{ success: boolean }>()
+
+							if (!outcome.success) {
+								return c.json({ error: 'Hcaptcha token failed' }, 400)
+							}
 						}
 					}
 
