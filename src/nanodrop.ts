@@ -98,10 +98,11 @@ export class NanoDrop implements DurableObject {
 				? (dropsCount.results[0].count as number)
 				: 0
 
+			const limitedByCountry = LIMITED_COUNTRIES.includes(countryCode)
+
 			if (
 				(count >= MAX_DROPS_PER_IP ||
-					(LIMITED_COUNTRIES.includes(countryCode) &&
-						count >= MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY)) &&
+					(limitedByCountry && count >= MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY)) &&
 				(!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV)
 			) {
 				const ipWhitelist =
