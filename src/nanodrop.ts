@@ -54,6 +54,7 @@ export class NanoDrop implements DurableObject {
 			privateKey: env.PRIVATE_KEY,
 			representative: env.REPRESENTATIVE,
 			debug: env.DEBUG === 'true',
+			timeout: 30000,
 		})
 
 		state.blockConcurrencyWhile(async () => {
