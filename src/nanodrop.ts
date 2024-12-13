@@ -40,7 +40,7 @@ export class NanoDrop implements DurableObject {
 	storage: DurableObjectStorage
 	static version = 'v0.1.0'
 	db: D1Database
-	ipTicketQueue: Record<string, Promise<void>[]> = {}
+	ipTicketQueue = new Map<string, Set<Promise<void>>>()
 	isDev: boolean
 
 	constructor(state: DurableObjectState, env: Bindings) {
@@ -802,30 +802,36 @@ export class NanoDrop implements DurableObject {
 	}
 
 	async enqueueIPTicket(ip: string): Promise<() => void> {
-		if (!(ip in this.ipTicketQueue)) {
-			this.ipTicketQueue[ip] = []
+		let promises = this.ipTicketQueue.get(ip)
+		if (!promises) {
+			promises = new Set<Promise<void>>()
+			this.ipTicketQueue.set(ip, promises)
 		}
 
-		const promises = [...this.ipTicketQueue[ip]]
-
-		if (promises.length === MAX_DROP_PER_IP_SIMULTANEOUSLY) {
+		if (promises.size >= MAX_DROP_PER_IP_SIMULTANEOUSLY) {
 			throw new HTTPException(403, { message: 'Many simultaneous requests' })
 		}
 
-		let resolve = () => {
-			return
-		}
+		let resolve: () => void
 		const promise = new Promise<void>(res => {
-			resolve = () => res()
+			resolve = res
 		})
 
-		this.ipTicketQueue[ip].push(promise)
+		promises.add(promise)
 
-		await Promise.all(promises)
+		try {
+			await Promise.all(promises)
+		} catch (error) {
+			promises.delete(promise)
+			throw error
+		}
 
 		return () => {
-			resolve()
-			this.ipTicketQueue[ip] = this.ipTicketQueue[ip].filter(p => p !== promise)
+			resolve!()
+			promises.delete(promise)
+			if (promises.size === 0) {
+				this.ipTicketQueue.delete(ip)
+			}
 		}
 	}
 
