@@ -817,14 +817,10 @@ export class NanoDrop implements DurableObject {
 			resolve = res
 		})
 
+		const previousPromises = [...promises]
 		promises.add(promise)
 
-		try {
-			await Promise.all(promises)
-		} catch (error) {
-			promises.delete(promise)
-			throw error
-		}
+		await Promise.all(previousPromises).catch(() => {})
 
 		return () => {
 			resolve!()
