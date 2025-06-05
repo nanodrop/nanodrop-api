@@ -38,7 +38,7 @@ export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
 	wallet: NanoWallet
 	storage: DurableObjectStorage
-	static version = 'v0.1.0'
+	static version = 'v1.0.0'
 	db: D1Database
 	ipTicketQueue = new Map<string, Set<Promise<void>>>()
 	isDev: boolean
