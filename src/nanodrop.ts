@@ -21,16 +21,18 @@ const MAX_DROP_AMOUNT = 0.01
 const DIVIDE_BALANCE_BY = 10000
 const PERIOD = 1000 * 60 * 60 * 24 * 7 // 1 week
 const MAX_DROPS_PER_IP = 5
+const MAX_DROPS_PER_PROXY_IP = 3
 const MAX_DROP_PER_IP_SIMULTANEOUSLY = 3
 const ENABLE_LIMIT_PER_IP_IN_DEV = false
 const MAX_DROPS_PER_ACCOUNT = 3
 const MAX_TMP_ACCOUNT_BLACKLIST_LENGTH = 10000
-const VERIFICATION_REQUIRED_BY_DEFAULT = false
+const VERIFICATION_REQUIRED_BY_DEFAULT = true
 const VERIFY_WHEN_PROXY = true
 const BAN_PROXIES = false
 const PROXY_AMOUNT_DIVIDE_BY = 10
 const LIMITED_COUNTRIES: string[] = []
 const MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY = 2
+const VERIFICATION_METHOD: 'hcaptcha' | 'turnstile' = 'hcaptcha'
 
 export class NanoDrop implements DurableObject {
 	app = new Hono<{ Bindings: Bindings }>().onError(errorHandler)
@@ -38,7 +40,7 @@ export class NanoDrop implements DurableObject {
 	storage: DurableObjectStorage
 	static version = 'v0.1.0'
 	db: D1Database
-	ipTicketQueue: Record<string, Promise<void>[]> = {}
+	ipTicketQueue = new Map<string, Set<Promise<void>>>()
 	isDev: boolean
 
 	constructor(state: DurableObjectState, env: Bindings) {
@@ -54,6 +56,7 @@ export class NanoDrop implements DurableObject {
 			privateKey: env.PRIVATE_KEY,
 			representative: env.REPRESENTATIVE,
 			debug: env.DEBUG === 'true',
+			timeout: 30000,
 		})
 
 		state.blockConcurrencyWhile(async () => {
@@ -75,6 +78,12 @@ export class NanoDrop implements DurableObject {
 
 			const countryCode = this.isDev ? '??' : c.req.headers.get('cf-ipcountry')
 
+			const origin = c.req.headers.get('origin') || 'Unknown'
+
+			if (origin.includes('api.nanodrop.io')) {
+				return c.json({ error: 'Temporarily unavailable due spam' }, 403)
+			}
+
 			if (!countryCode) {
 				return c.json({ error: 'Country header is missing' }, 400)
 			}
@@ -90,10 +99,11 @@ export class NanoDrop implements DurableObject {
 				? (dropsCount.results[0].count as number)
 				: 0
 
+			const limitedByCountry = LIMITED_COUNTRIES.includes(countryCode)
+
 			if (
 				(count >= MAX_DROPS_PER_IP ||
-					(LIMITED_COUNTRIES.includes(countryCode) &&
-						count >= MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY)) &&
+					(limitedByCountry && count >= MAX_DROPS_PER_IP_IN_LIMITED_COUNTRY)) &&
 				(!this.isDev || ENABLE_LIMIT_PER_IP_IN_DEV)
 			) {
 				const ipWhitelist =
@@ -103,7 +113,7 @@ export class NanoDrop implements DurableObject {
 				}
 			}
 
-			let isProxy = false
+			let canBeProxy = false
 
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
@@ -112,7 +122,7 @@ export class NanoDrop implements DurableObject {
 
 				if (!this.isDev) {
 					try {
-						isProxy = await this.checkProxy(ip)
+						canBeProxy = await this.checkProxy(ip)
 						proxyCheckedBy = 'badip.xyz'
 					} catch (error) {
 						// Do not throw
@@ -123,14 +133,18 @@ export class NanoDrop implements DurableObject {
 				await env.DB.prepare(
 					'INSERT INTO ip_info (ip, country_code, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
 				)
-					.bind(ip, countryCode, isProxy ? 1 : 0, proxyCheckedBy)
+					.bind(ip, countryCode, canBeProxy ? 1 : 0, proxyCheckedBy)
 					.run()
 			} else {
-				isProxy = ipInfo.results[0].is_proxy ? true : false
+				canBeProxy = ipInfo.results[0].is_proxy ? true : false
 			}
 
-			if (isProxy && BAN_PROXIES) {
+			if (canBeProxy && BAN_PROXIES) {
 				return c.json({ error: 'Proxies are not allowed' }, 403)
+			}
+
+			if (canBeProxy && count >= MAX_DROPS_PER_PROXY_IP) {
+				return c.json({ error: 'Drop limit reached for your ip' }, 403)
 			}
 
 			const defaultAmount = this.getDropAmount()
@@ -138,7 +152,7 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'Insufficient balance' }, 500)
 			}
 
-			const amount = isProxy
+			const amount = canBeProxy
 				? TunedBigNumber(defaultAmount)
 						.dividedBy(PROXY_AMOUNT_DIVIDE_BY)
 						.toString(10)
@@ -147,7 +161,7 @@ export class NanoDrop implements DurableObject {
 			const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
 			const expiresAt = Date.now() + TICKET_EXPIRATION
 			const verificationRequired =
-				VERIFICATION_REQUIRED_BY_DEFAULT || (isProxy && VERIFY_WHEN_PROXY)
+				VERIFICATION_REQUIRED_BY_DEFAULT || (canBeProxy && VERIFY_WHEN_PROXY)
 			const ticket = await this.generateTicket(
 				ip,
 				amount,
@@ -241,26 +255,54 @@ export class NanoDrop implements DurableObject {
 					}
 
 					if (verificationRequired) {
-						if (!payload.turnstileToken) {
-							return c.json({ error: 'Turnstile token is missing' }, 400)
+						if (VERIFICATION_METHOD === 'turnstile') {
+							if (!payload.turnstileToken) {
+								return c.json({ error: 'Turnstile token is missing' }, 400)
+							}
+
+							if (!env.TURNSTILE_SECRET) {
+								return c.json({ error: 'Turnstile secret is missing' }, 500)
+							}
+
+							const formData = new FormData()
+							formData.append('secret', env.TURNSTILE_SECRET)
+							formData.append('response', payload.turnstileToken)
+							formData.append('remoteip', ip)
+
+							const url =
+								'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+							const result = await fetch(url, {
+								body: formData,
+								method: 'POST',
+							})
+
+							const outcome = await result.json<{ success: boolean }>()
+
+							if (!outcome.success) {
+								return c.json({ error: 'Turnstile token failed' }, 400)
+							}
 						}
 
-						const formData = new FormData()
-						formData.append('secret', env.TURNSTILE_SECRET)
-						formData.append('response', payload.turnstileToken)
-						formData.append('remoteip', ip)
+						if (VERIFICATION_METHOD === 'hcaptcha') {
+							if (!env.HCAPTCHA_SECRET) {
+								return c.json({ error: 'Hcaptcha secret is missing' }, 500)
+							}
 
-						const url =
-							'https://challenges.cloudflare.com/turnstile/v0/siteverify'
-						const result = await fetch(url, {
-							body: formData,
-							method: 'POST',
-						})
+							const formData = new FormData()
+							formData.append('secret', env.HCAPTCHA_SECRET)
+							formData.append('response', payload.turnstileToken)
 
-						const outcome = await result.json<{ success: boolean }>()
+							const url = 'https://api.hcaptcha.com/siteverify'
+							const result = await fetch(url, {
+								body: formData,
+								method: 'POST',
+							})
 
-						if (!outcome.success) {
-							return c.json({ error: 'Turnstile token failed' }, 400)
+							const outcome = await result.json<{ success: boolean }>()
+
+							if (!outcome.success) {
+								return c.json({ error: 'Hcaptcha token failed' }, 400)
+							}
 						}
 					}
 
@@ -289,13 +331,20 @@ export class NanoDrop implements DurableObject {
 					throw error
 				}
 			} catch (error) {
-				if (
-					error instanceof Error &&
-					(error.message === 'Fork' || error.message === 'Old block')
-				) {
-					// Fix fork and Old block syncing wallet
-					this.wallet.sync()
-				}
+				// There is a bug in the current implementation the causes fork and old block errors
+				// Another bug in the wallet RPC implementation causes the wallet do not detect forks and old blocks
+				// So we will always sync the wallet after an error
+				// TODO: Uncomment the lines below when we correctly detect forks and old blocks
+
+				// if (
+				// 	error instanceof Error &&
+				// 	(error.message.includes('Fork') ||
+				// 		error.message.includes('Old block'))
+				// ) {
+				// 	// Fix fork and Old block syncing wallet
+
+				this.wallet.sync()
+				// }
 				throw error
 			}
 		})
@@ -753,30 +802,36 @@ export class NanoDrop implements DurableObject {
 	}
 
 	async enqueueIPTicket(ip: string): Promise<() => void> {
-		if (!(ip in this.ipTicketQueue)) {
-			this.ipTicketQueue[ip] = []
+		let promises = this.ipTicketQueue.get(ip)
+		if (!promises) {
+			promises = new Set<Promise<void>>()
+			this.ipTicketQueue.set(ip, promises)
 		}
 
-		const promises = [...this.ipTicketQueue[ip]]
-
-		if (promises.length === MAX_DROP_PER_IP_SIMULTANEOUSLY) {
+		if (promises.size >= MAX_DROP_PER_IP_SIMULTANEOUSLY) {
 			throw new HTTPException(403, { message: 'Many simultaneous requests' })
 		}
 
-		let resolve = () => {
-			return
-		}
+		let resolve: () => void
 		const promise = new Promise<void>(res => {
-			resolve = () => res()
+			resolve = res
 		})
 
-		this.ipTicketQueue[ip].push(promise)
+		promises.add(promise)
 
-		await Promise.all(promises)
+		try {
+			await Promise.all(promises)
+		} catch (error) {
+			promises.delete(promise)
+			throw error
+		}
 
 		return () => {
-			resolve()
-			this.ipTicketQueue[ip] = this.ipTicketQueue[ip].filter(p => p !== promise)
+			resolve!()
+			promises.delete(promise)
+			if (promises.size === 0) {
+				this.ipTicketQueue.delete(ip)
+			}
 		}
 	}
 

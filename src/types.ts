@@ -7,7 +7,8 @@ export type Bindings = {
 	PRIVATE_KEY: string
 	REPRESENTATIVE: string
 	ADMIN_TOKEN: string
-	TURNSTILE_SECRET: string
+	TURNSTILE_SECRET?: string
+	HCAPTCHA_SECRET?: string
 	ALLOW_ORIGIN?: string
 	DEBUG: string
 }
