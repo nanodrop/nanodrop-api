@@ -113,7 +113,7 @@ export class NanoDrop implements DurableObject {
 				}
 			}
 
-			let isProxy = false
+			let canBeProxy = false
 
 			if (!ipInfo.results?.length) {
 				// Retrieve IP info and save on db only the first time
@@ -122,7 +122,7 @@ export class NanoDrop implements DurableObject {
 
 				if (!this.isDev) {
 					try {
-						isProxy = await this.checkProxy(ip)
+						canBeProxy = await this.checkProxy(ip)
 						proxyCheckedBy = 'badip.xyz'
 					} catch (error) {
 						// Do not throw
@@ -133,18 +133,18 @@ export class NanoDrop implements DurableObject {
 				await env.DB.prepare(
 					'INSERT INTO ip_info (ip, country_code, is_proxy, proxy_checked_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT do nothing',
 				)
-					.bind(ip, countryCode, isProxy ? 1 : 0, proxyCheckedBy)
+					.bind(ip, countryCode, canBeProxy ? 1 : 0, proxyCheckedBy)
 					.run()
 			} else {
-				isProxy = ipInfo.results[0].is_proxy ? true : false
+				canBeProxy = ipInfo.results[0].is_proxy ? true : false
 			}
 
-			if (isProxy && BAN_PROXIES) {
+			if (canBeProxy && BAN_PROXIES) {
 				return c.json({ error: 'Proxies are not allowed' }, 403)
 			}
 
-			if (isProxy && count >= MAX_DROPS_PER_PROXY_IP) {
-				return c.json({ error: 'Drop limit reached for your proxy' }, 403)
+			if (canBeProxy && count >= MAX_DROPS_PER_PROXY_IP) {
+				return c.json({ error: 'Drop limit reached for your ip' }, 403)
 			}
 
 			const defaultAmount = this.getDropAmount()
@@ -152,7 +152,7 @@ export class NanoDrop implements DurableObject {
 				return c.json({ error: 'Insufficient balance' }, 500)
 			}
 
-			const amount = isProxy
+			const amount = canBeProxy
 				? TunedBigNumber(defaultAmount)
 						.dividedBy(PROXY_AMOUNT_DIVIDE_BY)
 						.toString(10)
@@ -161,7 +161,7 @@ export class NanoDrop implements DurableObject {
 			const amountNano = convert(amount, { from: Unit.raw, to: Unit.NANO })
 			const expiresAt = Date.now() + TICKET_EXPIRATION
 			const verificationRequired =
-				VERIFICATION_REQUIRED_BY_DEFAULT || (isProxy && VERIFY_WHEN_PROXY)
+				VERIFICATION_REQUIRED_BY_DEFAULT || (canBeProxy && VERIFY_WHEN_PROXY)
 			const ticket = await this.generateTicket(
 				ip,
 				amount,
